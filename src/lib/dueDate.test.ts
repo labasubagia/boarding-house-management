@@ -57,44 +57,46 @@ describe('toLocalISO', () => {
 })
 
 describe('dueDateForMonth — deadline is day of move-in each month', () => {
+  function mustDue(moveIn: string, month: string): Date {
+    const due = dueDateForMonth(moveIn, month)
+    expect(due).not.toBeNull()
+    return due as Date
+  }
+
   it('uses move-in day of month as due day', () => {
-    const due = dueDateForMonth('2026-01-17', '2026-02')
+    const due = mustDue('2026-01-17', '2026-02')
     expect(due.getFullYear()).toBe(2026)
     expect(due.getMonth()).toBe(1)
     expect(due.getDate()).toBe(17)
   })
 
   it('keeps the same due day across later months', () => {
-    expect(dueDateForMonth('2026-01-17', '2026-03').getDate()).toBe(17)
-    expect(dueDateForMonth('2026-01-17', '2026-12').getDate()).toBe(17)
-    expect(dueDateForMonth('2026-01-17', '2027-01').getDate()).toBe(17)
+    expect(mustDue('2026-01-17', '2026-03').getDate()).toBe(17)
+    expect(mustDue('2026-01-17', '2026-12').getDate()).toBe(17)
+    expect(mustDue('2026-01-17', '2027-01').getDate()).toBe(17)
   })
 
   it('is not affected by early payment (deadline still from move-in only)', () => {
-    // Paid on day 1; due must still be day 17
-    const due = dueDateForMonth('2026-01-17', '2026-03')
-    expect(due.getDate()).toBe(17)
+    expect(mustDue('2026-01-17', '2026-03').getDate()).toBe(17)
   })
 
   it('clamps short months: Jan 31 → Feb 28 (non-leap)', () => {
-    const due = dueDateForMonth('2026-01-31', '2026-02')
+    const due = mustDue('2026-01-31', '2026-02')
     expect(due.getMonth()).toBe(1)
     expect(due.getDate()).toBe(28)
   })
 
   it('clamps leap year: Jan 31 → Feb 29', () => {
-    const due = dueDateForMonth('2024-01-31', '2024-02')
-    expect(due.getDate()).toBe(29)
+    expect(mustDue('2024-01-31', '2024-02').getDate()).toBe(29)
   })
 
   it('handles day 31 in long months', () => {
-    expect(dueDateForMonth('2026-01-31', '2026-03').getDate()).toBe(31)
-    expect(dueDateForMonth('2026-01-31', '2026-05').getDate()).toBe(31)
+    expect(mustDue('2026-01-31', '2026-03').getDate()).toBe(31)
+    expect(mustDue('2026-01-31', '2026-05').getDate()).toBe(31)
   })
 
-  it('does not treat due as past before move-in month', () => {
-    const due = dueDateForMonth('2026-06-15', '2026-05')
-    expect(startOfMonth(due)).toEqual(startOfMonth(new Date(2026, 5, 15)))
+  it('returns null before move-in month (not renting yet)', () => {
+    expect(dueDateForMonth('2026-06-15', '2026-05')).toBeNull()
   })
 })
 
@@ -166,6 +168,26 @@ describe('computeStatus — room status business rules', () => {
         hasPayment: false,
         monthKey,
         today: new Date(2026, 1, 18),
+      }),
+    ).toBe('terlambat')
+  })
+
+  it('month before move-in is belum even if today is long past move-in', () => {
+    // Regression: browsing May when move-in is Jun used to return terlambat
+    expect(
+      computeStatus({
+        tenant: tenant({ move_in_date: '2026-06-15' }),
+        hasPayment: false,
+        monthKey: '2026-05',
+        today: new Date(2026, 8, 20),
+      }),
+    ).toBe('belum')
+    expect(
+      computeStatus({
+        tenant: tenant({ move_in_date: '2026-06-15' }),
+        hasPayment: false,
+        monthKey: '2026-06',
+        today: new Date(2026, 8, 20),
       }),
     ).toBe('terlambat')
   })

@@ -66,14 +66,25 @@ export async function signOut(): Promise<void> {
 
 export function onAuthChange(cb: (session: Session | null) => void): () => void {
   listeners.add(cb)
+  let unsubSupabase: (() => void) | null = null
+  let disposed = false
+
   if (isSupabaseConfigured) {
     void getSupabase().then((supabase) => {
-      const { data } = supabase.auth.onAuthStateChange((_e, s) => cb(s))
-      return () => data.subscription.unsubscribe()
+      if (disposed) return
+      const { data } = supabase.auth.onAuthStateChange((_e, s) => {
+        if (!disposed) cb(s)
+      })
+      unsubSupabase = () => {
+        void data.subscription.unsubscribe()
+      }
     })
   }
+
   return () => {
+    disposed = true
     listeners.delete(cb)
+    unsubSupabase?.()
   }
 }
 

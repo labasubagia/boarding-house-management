@@ -47,20 +47,20 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
-/** Due date for a given month, based on day of move_in_date. Clamps short months (e.g. Jan 31 → Feb 28). */
-export function dueDateForMonth(moveInDate: string, monthKey: string): Date {
+/**
+ * Due date for a given month, based on day of move_in_date.
+ * Clamps short months (e.g. Jan 31 → Feb 28).
+ * Returns null when the selected month is before the move-in month (not yet renting).
+ */
+export function dueDateForMonth(moveInDate: string, monthKey: string): Date | null {
   const [y, m] = monthKey.split('-').map(Number)
   const [miY, miM, miD] = moveInDate.split('-').map(Number)
-  const day = miD
   const lastDay = new Date(y, m, 0).getDate()
-  const moveInMonthIndex = miM - 1
-  // If tenant moved in after this month's day in a later calendar sense, due still applies monthly from move-in anniversary
-  const dueDay = Math.min(day, lastDay)
+  const dueDay = Math.min(miD, lastDay)
   const due = new Date(y, m - 1, dueDay)
-  // Before move-in month: not yet due
-  const moveIn = new Date(miY, moveInMonthIndex, miD)
+  const moveIn = new Date(miY, miM - 1, miD)
   if (startOfMonth(due) < startOfMonth(moveIn)) {
-    return moveIn
+    return null
   }
   return due
 }
@@ -81,6 +81,8 @@ export function computeStatus(opts: {
   if (!tenant) return 'kosong'
   if (hasPayment) return 'lunas'
   const due = dueDateForMonth(tenant.move_in_date, monthKey)
+  // Viewing a month before move-in: not renting yet → not overdue (docs: belum dianggap jatuh tempo)
+  if (!due) return 'belum'
   return isPastDue(due, today) ? 'terlambat' : 'belum'
 }
 

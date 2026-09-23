@@ -78,6 +78,7 @@ export default function RoomDetail() {
     if (!tenantId) return
     try {
       setPayments(await fetchPaymentsForTenant(tenantId))
+      setErr(null)
     } catch (fetchErr) {
       setErr((fetchErr as Error).message)
     }
@@ -90,8 +91,10 @@ export default function RoomDetail() {
     try {
       await moveOutTenant(activeTenant.id)
       await reload()
+      setErr(null)
       setMsg('Penyewa dipindahkan keluar.')
     } catch (e) {
+      setMsg(null)
       setErr((e as Error).message)
     }
   }
@@ -101,7 +104,10 @@ export default function RoomDetail() {
     try {
       await deletePayment(id)
       await refreshPayments()
+      setErr(null)
+      setMsg('Pembayaran dihapus.')
     } catch (e) {
+      setMsg(null)
       setErr((e as Error).message)
     }
   }
@@ -269,6 +275,7 @@ export default function RoomDetail() {
             setShowTenant(false)
             await reload()
             await refreshPayments()
+            setErr(null)
             setMsg(editingTenant ? 'Penyewa diperbarui.' : 'Penyewa ditambahkan.')
           }}
         />

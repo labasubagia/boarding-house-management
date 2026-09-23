@@ -122,7 +122,7 @@ describe('business flow: record monthly payment', () => {
       notes: 'awal',
     })
     const marchDue = dueDateForMonth(tenant.move_in_date, '2026-03')
-    expect(marchDue.getDate()).toBe(17)
+    expect(marchDue?.getDate()).toBe(17)
 
     const marchPayments = await fetchPaymentsForMonth('2026-03')
     expect(marchPayments).toHaveLength(0)
@@ -318,7 +318,7 @@ describe('update tenant details', () => {
     expect(updated?.rent).toBe(1750000)
     expect(updated?.move_in_date).toBe('2026-03-05')
     // Due day follows new move-in day
-    expect(dueDateForMonth(updated!.move_in_date, '2026-04').getDate()).toBe(5)
+    expect(dueDateForMonth(updated!.move_in_date, '2026-04')?.getDate()).toBe(5)
   })
 })
 

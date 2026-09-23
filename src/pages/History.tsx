@@ -78,7 +78,7 @@ export default function History() {
 
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm text-slate-600">
-          {payments.length} pembayaran · Total{' '}
+          {payLoading ? 'Memuat…' : `${payments.length} pembayaran`} · Total{' '}
           <strong>{formatCurrency(total)}</strong>
         </div>
         <button className={buttonSecondary} onClick={exportCsv} disabled={payLoading || payments.length === 0}>

@@ -31,8 +31,10 @@ export default function ManageRooms() {
     try {
       await deleteRoom(id)
       await reload()
+      setErr(null)
       setMsg('Kamar dihapus.')
     } catch (e) {
+      setMsg(null)
       setErr((e as Error).message)
     }
   }
@@ -42,8 +44,10 @@ export default function ManageRooms() {
     try {
       await deleteBuilding(id)
       await reload()
+      setErr(null)
       setMsg('Gedung dihapus.')
     } catch (e) {
+      setMsg(null)
       setErr((e as Error).message)
     }
   }
@@ -145,6 +149,7 @@ export default function ManageRooms() {
           onSaved={async () => {
             setShowBuilding(false)
             await reload()
+            setErr(null)
             setMsg('Gedung ditambahkan.')
           }}
         />
@@ -157,6 +162,7 @@ export default function ManageRooms() {
           onSaved={async (isEdit) => {
             setEditRoom(null)
             await reload()
+            setErr(null)
             setMsg(isEdit ? 'Kamar diperbarui.' : 'Kamar ditambahkan.')
           }}
         />

@@ -10,10 +10,11 @@ Aturan inti aplikasi Kos Tracker. Implementasi: `src/lib/dueDate.ts`, `src/lib/a
 | Pola | Hari yang sama **setiap bulan** (mis. masuk 17 Jan → jatuh tempo 17 Feb, 17 Mar, …) |
 | Bayar lebih awal | **Tidak** menggeser jatuh tempo bulan berikutnya |
 | Bulan pendek | Di-clamp ke hari terakhir bulan (31 Jan → 28 Feb / 29 Feb leap year) |
-| Sebelum bulan masuk | Belum dianggap jatuh tempo di bulan sebelum `move_in_date` |
+| Sebelum bulan masuk | Bukan jatuh tempo; status bulan itu **`belum`** (bukan `terlambat`) |
 
 ```
 dueDate = min(day(move_in_date), lastDayOfMonth(month))
+// null / belum jika month < bulan masuk
 ```
 
 ## 2. Status kamar (per bulan yang dipilih)
@@ -22,8 +23,8 @@ dueDate = min(day(move_in_date), lastDayOfMonth(month))
 | --- | --- |
 | `kosong` | Tidak ada penyewa aktif di kamar |
 | `lunas` | Ada baris `payments` untuk `(tenant_id, period_month)` bulan itu |
-| `belum` | Ada penyewa, belum bayar, **hari ini ≤ jatuh tempo** (masa tenggang) |
-| `terlambat` | Ada penyewa, belum bayar, **hari ini > akhir hari jatuh tempo** |
+| `belum` | Ada penyewa, belum bayar, dan (**hari ini ≤ jatuh tempo** ATAU bulan sebelum `move_in_date`) |
+| `terlambat` | Ada penyewa, belum bayar, **hari ini > akhir hari jatuh tempo**, dan bulan ≥ bulan masuk |
 
 Prioritas: `kosong` → `lunas` → `terlambat` / `belum`.
 

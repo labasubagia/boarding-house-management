@@ -129,7 +129,13 @@ function RoomRow({
           ) : null}
         </div>
         <div className="text-xs text-slate-500">
-          {due ? `Jatuh tempo ${formatDateID(toLocalISO(due))}` : tenant ? 'Sudah lunas' : 'Tidak ada penyewa'}
+          {due
+            ? `Jatuh tempo ${formatDateID(toLocalISO(due))}`
+            : !tenant
+              ? 'Tidak ada penyewa'
+              : status === 'lunas'
+                ? 'Sudah lunas'
+                : 'Belum berlaku'}
         </div>
       </div>
       <StatusBadge status={status} />
