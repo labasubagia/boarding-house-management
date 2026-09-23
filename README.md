@@ -50,6 +50,7 @@ npm run dev       # mode dummy
 | `npm run format` | oxlint auto-fix (lint + style fixes) |
 | `npm run test` | Vitest (business flow tests) |
 | `npm run test:watch` | Vitest watch |
+| `npm run test:e2e` | Playwright E2E (auto start/stop dev server) |
 | `npm run check` | typecheck + lint + test + build |
 | `npm run preview` | Preview `dist/` |
 

@@ -10,5 +10,11 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     globals: false,
+    // Unit tests always run dummy-mode (ignore local .env Supabase credentials)
+    env: {
+      VITE_DUMMY: '1',
+      VITE_SUPABASE_URL: '',
+      VITE_SUPABASE_ANON_KEY: '',
+    },
   },
 })

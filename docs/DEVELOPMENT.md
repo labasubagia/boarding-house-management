@@ -23,8 +23,11 @@ Tanpa `.env`, aplikasi berjalan dalam **mode dummy** (localStorage + seed contoh
 | `npm run typecheck` | `tsc -b` saja |
 | `npm run lint` | **oxlint** lint `src/` |
 | `npm run lint:fix` / `npm run format` | oxlint auto-fix (format + lint fixes) |
-| `npm run test` | Vitest run sekali (CI) |
+| `npm run test` | Vitest run sekali (CI) — selalu dummy mode (abaikan `.env`) |
 | `npm run test:watch` | Vitest watch mode |
+| `npm run test:coverage` | Vitest + coverage |
+| `npm run test:e2e` | Playwright E2E (auto start/stop dev server via `webServer`) |
+| `npm run test:e2e:ui` | Playwright UI mode |
 | `npm run check` | typecheck + lint + test + build |
 | `npm run preview` | Preview build lokal |
 
@@ -56,10 +59,43 @@ Jalankan: `npm run test`
 
 Dokumentasi aturan bisnis: [BUSINESS_RULES.md](./BUSINESS_RULES.md).
 
+## E2E (Playwright Test)
+
+Config: [`playwright.config.ts`](../playwright.config.ts) — `webServer` start `npm run dev` otomatis, reuse server yang sudah jalan, stop setelah test selesai.
+
+Test: [`e2e/smoke.spec.ts`](../e2e/smoke.spec.ts) — login → dashboard → bayar → kelola kamar → riwayat/CSV → logout.
+
+**Prasyarat (sekali):** `npx playwright install chromium`
+
+**Jalankan:**
+
+```bash
+npm run test:e2e
+```
+
+**Env (opsional):**
+
+| Variabel | Default | Fungsi |
+| --- | --- | --- |
+| `E2E_BASE_URL` | `http://127.0.0.1:5173` | baseURL |
+| `PORT` | `5173` | Port dev server |
+| `E2E_EMAIL` | `test@test.test` | Email login |
+| `E2E_PASSWORD` | `test123` | Password login |
+
+Dummy mode:
+
+```bash
+VITE_DUMMY=1 npm run test:e2e
+```
+
+Report/artifact: `playwright-report/`, `e2e/output/` (di-gitignore).
+
 ## Struktur project
 
 ```
 docs/                  Dokumentasi
+e2e/smoke.spec.ts      Playwright E2E smoke (npm run test:e2e)
+playwright.config.ts   Playwright config + webServer
 supabase/schema.sql    Skema DB + RLS + seed (untuk mode Supabase)
 src/
   components/          Layout, UI kecil
