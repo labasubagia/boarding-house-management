@@ -1,3 +1,18 @@
 # Format + lint staged files, then run full test suite
+# Fail closed if secrets would be committed
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks not found — install it to enable secret scanning:" >&2
+  echo "  https://github.com/gitleaks/gitleaks#install" >&2
+  exit 1
+fi
+
+echo "pre-commit: scanning staged changes for secrets (gitleaks)…"
+if ! gitleaks protect --staged --redact --no-banner; then
+  echo "pre-commit: secret detected in staged files — commit blocked." >&2
+  echo "  Move real credentials to .env (gitignored) / GitHub Secrets." >&2
+  echo "  false positive? add fingerprint to .gitleaksignore" >&2
+  exit 1
+fi
+
 npx lint-staged
 npm test

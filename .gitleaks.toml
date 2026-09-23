@@ -1,0 +1,11 @@
+# Gitleaks config — extend default rules (entropy, private keys, tokens, etc.)
+# Docs: https://github.com/gitleaks/gitleaks#configuration
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders / docs that look like secrets but are not"
+paths = [
+  '''\.env\.example$''',
+  '''docs/.*$''',
+]

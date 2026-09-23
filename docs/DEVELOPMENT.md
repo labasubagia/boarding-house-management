@@ -28,6 +28,7 @@ Tanpa `.env`, aplikasi berjalan dalam **mode dummy** (localStorage + seed contoh
 | `npm run test:coverage` | Vitest + coverage |
 | `npm run test:e2e` | Playwright E2E (auto start/stop dev server via `webServer`) |
 | `npm run test:e2e:ui` | Playwright UI mode |
+| `npm run test:secrets` | **gitleaks** full-history secret scan |
 | `npm run check` | typecheck + lint + test + build |
 | `npm run preview` | Preview build lokal |
 
@@ -40,6 +41,23 @@ Konfigurasi: [`.oxlintrc.json`](../.oxlintrc.json)
 - Auto-fix: `npm run format` (setara `oxlint src --fix`)
 
 oxlint menangani lint **dan** perbaikan style otomatis yang tersedia — tidak perlu Prettier/Biome di project ini.
+
+## Secret scanning (gitleaks)
+
+**Prasyarat:** [`gitleaks`](https://github.com/gitleaks/gitleaks#install) di `PATH` (wajib — pre-commit gagal jika tidak ada).
+
+| Trigger | Perintah | Cakupan |
+| --- | --- | --- |
+| `git commit` (Husky pre-commit) | `gitleaks protect --staged` | File yang di-`git add` saja |
+| Manual / CI | `npm run test:secrets` | Full git history |
+
+Config: [`.gitleaks.toml`](../.gitleaks.toml) (extend default rules).
+
+**Jangan commit:** `.env` (sudah di-gitignore), API keys, password asli → pakai `.env` lokal + **GitHub Secrets**.
+
+False positive: tambah fingerprint ke [`.gitleaksignore`](../.gitleaksignore) (opsional, belum dibuat).
+
+Urutan pre-commit: **gitleaks → lint-staged → vitest**.
 
 ## Tests (Vitest)
 

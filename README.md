@@ -29,7 +29,7 @@ Aturan lengkap: [docs/BUSINESS_RULES.md](docs/BUSINESS_RULES.md).
 ## Stack
 
 - Vite + React + TypeScript + Tailwind CSS (HashRouter → GitHub Pages)
-- Lint/format: **oxlint** · Test: **Vitest** (+ happy-dom)
+- Lint/format: **oxlint** · Test: **Vitest** (+ happy-dom) · Secrets: **gitleaks** (Husky pre-commit)
 - Backend: **dummy localStorage** atau **Supabase** (free tier)
 - Deploy: GitHub Actions → Pages · Keep-alive harian (anti pause 7 hari)
 
@@ -51,6 +51,7 @@ npm run dev       # mode dummy
 | `npm run test` | Vitest (business flow tests) |
 | `npm run test:watch` | Vitest watch |
 | `npm run test:e2e` | Playwright E2E (auto start/stop dev server) |
+| `npm run test:secrets` | gitleaks secret scan (full history) |
 | `npm run check` | typecheck + lint + test + build |
 | `npm run preview` | Preview `dist/` |
 
