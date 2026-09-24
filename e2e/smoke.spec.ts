@@ -10,9 +10,13 @@ const USER_PASS = process.env.E2E_PASSWORD || 'test123'
 test.describe('Kos Tracker smoke', () => {
   test('full business flow', async ({ page, baseURL }) => {
     const consoleErrors: string[] = []
+    const unauthorized: string[] = []
     page.on('pageerror', (e) => consoleErrors.push(String(e)))
     page.on('console', (msg) => {
       if (msg.type() === 'error') consoleErrors.push(msg.text())
+    })
+    page.on('response', (res) => {
+      if (res.status() === 401) unauthorized.push(res.url())
     })
 
     // 1. Login screen (domcontentloaded — networkidle never settles with Vite HMR WS)
@@ -169,7 +173,11 @@ test.describe('Kos Tracker smoke', () => {
     await expect(page.locator('h1:has-text("Riwayat pembayaran")')).toBeVisible()
     await page.screenshot({ path: path.join(OUT_DIR, 'history.png'), fullPage: true })
 
-    expect(consoleErrors, `JS errors: ${consoleErrors.slice(0, 5).join(' | ')}`).toHaveLength(0)
+    const detail = [
+      ...consoleErrors.slice(0, 5),
+      ...unauthorized.slice(0, 5).map((u) => `401 ${u}`),
+    ].join(' | ')
+    expect(consoleErrors, `JS errors: ${detail}`).toHaveLength(0)
     expect(baseURL).toBeTruthy()
   })
 })

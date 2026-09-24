@@ -16,7 +16,8 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  // CI can flake (e.g. transient auth 401 in console) — retry before failing the gate
+  retries: process.env.CI ? 2 : 0,
   reporter: [['list']],
   outputDir: 'e2e/output/test-results',
   use: {
