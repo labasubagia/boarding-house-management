@@ -91,7 +91,7 @@ Config: [`playwright.config.ts`](../playwright.config.ts) — webServer start `n
 3. Buat user test via GoTrue admin API (`E2E_EMAIL` / `E2E_PASSWORD`)
 4. Jalankan `npm run test:e2e:supabase`
 
-Workflow: [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml). Unit test juga dummy via `vite.config.ts` `test.env`.
+Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — job `build` → `e2e` → `deploy` (deploy hanya setelah keduanya hijau). Unit test juga dummy via `vite.config.ts` `test.env`.
 
 Test: [`e2e/smoke.spec.ts`](../e2e/smoke.spec.ts) — login → dashboard → bayar → kelola kamar → riwayat/CSV → logout. Deteksi mode via banner "Mode dummy".
 
@@ -137,7 +137,7 @@ src/
     supabase.ts        Deteksi mode / lazy client
     csv.ts             Export CSV
   pages/               Login, Dashboard, RoomDetail, ManageRooms, History
-.github/workflows/     Deploy Pages + keep-alive + E2E (Supabase lokal di CI)
+.github/workflows/     CI (build → e2e → deploy Pages) + keep-alive
 ```
 
 ## Mode data

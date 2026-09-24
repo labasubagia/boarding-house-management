@@ -39,12 +39,13 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 2. Push ke `main` / `master` → workflow **Deploy to GitHub Pages** jalan otomatis.
 3. URL: `https://<user>.github.io/<repo>/` (HashRouter: `#/`, `#/riwayat`, …)
 
-### Workflow deploy
+### Workflow CI (gate → deploy)
 
-`.github/workflows/deploy.yml`:
+`.github/workflows/ci.yml`:
 
-- `npm ci` → `npm run build` (env dari secrets) → upload `dist` → deploy Pages
-- disarankan tambah `npm run test` sebelum build di CI
+- **build** → lint + unit test + `npm run build` (env dari secrets)
+- **e2e** (`needs: build`) → stack Supabase lokal + Playwright
+- **deploy** (`needs: e2e`) → upload `dist` → deploy Pages — hanya `push` ke `main`/`master` atau `workflow_dispatch` (tidak jalan di PR)
 
 ### Workflow keep-alive (anti pause)
 

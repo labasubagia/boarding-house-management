@@ -1,4 +1,4 @@
-name: E2E
+name: CI
 
 on:
   pull_request:
@@ -6,12 +6,37 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
-  group: e2e-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
   e2e:
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -70,3 +95,20 @@ jobs:
             playwright-report/
           retention-days: 7
           if-no-files-found: ignore
+
+  deploy:
+    needs: e2e
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
