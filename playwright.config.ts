@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const PORT = Number(process.env.PORT || 5173)
+const PORT = Number(process.env.E2E_PORT || 5174)
 const baseURL = process.env.E2E_BASE_URL || `http://127.0.0.1:${PORT}`
 
 export default defineConfig({
@@ -28,9 +28,16 @@ export default defineConfig({
   webServer: {
     command: `npm run dev -- --host 127.0.0.1 --port ${PORT}`,
     url: baseURL,
-    reuseExistingServer: true,
+    // Always start a fresh dummy-mode server — never reuse a Supabase-mode dev server
+    reuseExistingServer: false,
     timeout: 60_000,
     stdout: 'pipe',
     stderr: 'pipe',
+    env: {
+      ...process.env,
+      VITE_DUMMY: '1',
+      VITE_SUPABASE_URL: '',
+      VITE_SUPABASE_ANON_KEY: '',
+    },
   },
 })

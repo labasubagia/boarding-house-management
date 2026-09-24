@@ -79,7 +79,9 @@ Dokumentasi aturan bisnis: [BUSINESS_RULES.md](./BUSINESS_RULES.md).
 
 ## E2E (Playwright Test)
 
-Config: [`playwright.config.ts`](../playwright.config.ts) — `webServer` start `npm run dev` otomatis, reuse server yang sudah jalan, stop setelah test selesai.
+Config: [`playwright.config.ts`](../playwright.config.ts) — webServer start `npm run dev` otomatis **dalam mode dummy** (`VITE_DUMMY=1`, Supabase env dikosongkan), port **5174**, `reuseExistingServer: false` (tidak pernah menumpuk dev server yang pakai `.env` Supabase).
+
+**E2E tidak boleh menyentuh Supabase production** (satu project free tier = data prod). Unit test juga dummy via `vite.config.ts` `test.env`.
 
 Test: [`e2e/smoke.spec.ts`](../e2e/smoke.spec.ts) — login → dashboard → bayar → kelola kamar → riwayat/CSV → logout.
 
@@ -95,16 +97,10 @@ npm run test:e2e
 
 | Variabel | Default | Fungsi |
 | --- | --- | --- |
-| `E2E_BASE_URL` | `http://127.0.0.1:5173` | baseURL |
-| `PORT` | `5173` | Port dev server |
-| `E2E_EMAIL` | `test@test.test` | Email login |
-| `E2E_PASSWORD` | `test123` | Password login |
-
-Dummy mode:
-
-```bash
-VITE_DUMMY=1 npm run test:e2e
-```
+| `E2E_BASE_URL` | `http://127.0.0.1:5174` | baseURL |
+| `E2E_PORT` | `5174` | Port webServer E2E |
+| `E2E_EMAIL` | `test@test.test` | Email login (dummy) |
+| `E2E_PASSWORD` | `test123` | Password login (dummy) |
 
 Report/artifact: `playwright-report/`, `e2e/output/` (di-gitignore).
 
@@ -137,6 +133,8 @@ src/
 | Supabase | `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` terisi | Postgres via Supabase |
 
 Reset dummy: DevTools → `localStorage.clear()` lalu reload.
+
+**Satu environment (free tier):** Supabase = production only. Unit test & E2E **selalu dummy** (di-paksa di config) — jangan arahkan test ke project production agar data tidak tabrak. Dev harian: jalankan tanpa `.env` (atau `VITE_DUMMY=1`) kecuali sengaja mengetes API.
 
 ## Conventions
 

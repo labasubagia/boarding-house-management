@@ -88,3 +88,5 @@ src/pages/          Login · Dashboard · RoomDetail · ManageRooms · History
 6. Aktifkan workflow **Supabase keep-alive**
 
 Detail: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+**Satu environment:** unit test + E2E selalu mode dummy; hanya GitHub Pages yang menulis Supabase production — agar data tidak tabrak.

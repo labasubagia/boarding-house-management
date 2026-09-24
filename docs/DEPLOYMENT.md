@@ -64,6 +64,31 @@ Jika project tetap pause: Supabase Dashboard → **Resume** (data aman, ≤ 1 ta
 - [ ] Export CSV jalan
 - [ ] keep-alive workflow merah/hijau di Actions
 
+## 6. Satu environment (free tier) — anti tabrak data
+
+Satu project Supabase = **production only**.
+
+| Aktivitas | Mode | Sentuh Supabase? |
+| --- | --- | --- |
+| Unit test / `npm run check` | dummy (paksa di config) | Tidak |
+| `npm run test:e2e` | dummy (paksa di Playwright) | Tidak |
+| Dev harian | dummy (tanpa `.env` / `VITE_DUMMY=1`) | Tidak |
+| GitHub Pages | Supabase (via Actions secrets) | Ya — satu-satunya writer |
+
+Jangan jalankan dev/E2E dengan `.env` Supabase aktif — akan menulis ke data produksi (tabrakan).
+
+### Bersihkan pollution E2E (sekali)
+
+Jika pernah E2E kena Supabase (mis. row `e2e-cash` / `Tenant Uji E2E`), SQL Editor:
+
+```sql
+delete from tenants where name = 'Tenant Uji E2E';
+delete from rooms where name = '99';
+delete from buildings where name ilike 'Gedung E2E%';
+-- sisa payment yatim (jika ada)
+delete from payments where notes = 'e2e-cash';
+```
+
 ## Backup
 
 - Riwayat → **Export CSV** per bulan

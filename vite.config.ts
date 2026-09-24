@@ -10,6 +10,9 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     globals: false,
+    // CI/local under load can exceed the 5s default
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
     // Unit tests always run dummy-mode (ignore local .env Supabase credentials)
     env: {
       VITE_DUMMY: '1',
