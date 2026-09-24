@@ -1,6 +1,6 @@
 -- Kos payment tracker — schema + RLS + seed
--- Run once in Supabase SQL Editor (production).
--- Local/CI: use supabase/migrations/ instead (kept in sync).
+-- Mirror of supabase/schema.sql (SQL Editor / prod). Keep both in sync.
+-- Applied automatically by `supabase start` / `supabase db reset` (CI E2E).
 
 create extension if not exists "pgcrypto";
 

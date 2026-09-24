@@ -26,8 +26,9 @@ Tanpa `.env`, aplikasi berjalan dalam **mode dummy** (localStorage + seed contoh
 | `npm run test` | Vitest run sekali (CI) — selalu dummy mode (abaikan `.env`) |
 | `npm run test:watch` | Vitest watch mode |
 | `npm run test:coverage` | Vitest + coverage |
-| `npm run test:e2e` | Playwright E2E (auto start/stop dev server via `webServer`) |
-| `npm run test:e2e:ui` | Playwright UI mode |
+| `npm run test:e2e` | Playwright E2E dummy mode (auto start/stop dev server via `webServer`) |
+| `npm run test:e2e:ui` | Playwright UI mode (dummy) |
+| `npm run test:e2e:supabase` | Playwright E2E mode Supabase — butuh `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` di shell/CI (lihat bawah) |
 | `npm run test:secrets` | **gitleaks** full-history secret scan |
 | `npm run check` | typecheck + lint + test + build |
 | `npm run preview` | Preview build lokal |
@@ -79,11 +80,20 @@ Dokumentasi aturan bisnis: [BUSINESS_RULES.md](./BUSINESS_RULES.md).
 
 ## E2E (Playwright Test)
 
-Config: [`playwright.config.ts`](../playwright.config.ts) — webServer start `npm run dev` otomatis **dalam mode dummy** (`VITE_DUMMY=1`, Supabase env dikosongkan), port **5174**, `reuseExistingServer: false` (tidak pernah menumpuk dev server yang pakai `.env` Supabase).
+Config: [`playwright.config.ts`](../playwright.config.ts) — webServer start `npm run dev` otomatis, port **5174**, `reuseExistingServer: false`.
 
-**E2E tidak boleh menyentuh Supabase production** (satu project free tier = data prod). Unit test juga dummy via `vite.config.ts` `test.env`.
+**Mode dummy (default, lokal):** `npm run test:e2e` memaksa `VITE_DUMMY=1` dan mengosongkan env Supabase — tidak pernah menyentuh project production.
 
-Test: [`e2e/smoke.spec.ts`](../e2e/smoke.spec.ts) — login → dashboard → bayar → kelola kamar → riwayat/CSV → logout.
+**Mode Supabase (CI):** `npm run test:e2e:supabase` aktif hanya jika **shell/CI** mengekspor `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (file `.env` lokal diabaikan Playwright — aman dari salah kena production). CI memakai stack self-hosted via CLI:
+
+1. `supabase/setup-cli` + `supabase start` (Docker di runner GitHub)
+2. Migrasi + seed dari [`supabase/migrations/`](../supabase/migrations/) (mirror `supabase/schema.sql`)
+3. Buat user test via GoTrue admin API (`E2E_EMAIL` / `E2E_PASSWORD`)
+4. Jalankan `npm run test:e2e:supabase`
+
+Workflow: [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml). Unit test juga dummy via `vite.config.ts` `test.env`.
+
+Test: [`e2e/smoke.spec.ts`](../e2e/smoke.spec.ts) — login → dashboard → bayar → kelola kamar → riwayat/CSV → logout. Deteksi mode via banner "Mode dummy".
 
 **Prasyarat (sekali):** `npx playwright install chromium`
 
@@ -99,8 +109,10 @@ npm run test:e2e
 | --- | --- | --- |
 | `E2E_BASE_URL` | `http://127.0.0.1:5174` | baseURL |
 | `E2E_PORT` | `5174` | Port webServer E2E |
-| `E2E_EMAIL` | `test@test.test` | Email login (dummy) |
-| `E2E_PASSWORD` | `test123` | Password login (dummy) |
+| `E2E_EMAIL` | `test@test.test` | Email login |
+| `E2E_PASSWORD` | `test123` | Password login |
+| `VITE_SUPABASE_URL` | — | URL Supabase (hanya dari shell/CI → mode Supabase) |
+| `VITE_SUPABASE_ANON_KEY` | — | Anon key (hanya dari shell/CI → mode Supabase) |
 
 Report/artifact: `playwright-report/`, `e2e/output/` (di-gitignore).
 
@@ -110,7 +122,10 @@ Report/artifact: `playwright-report/`, `e2e/output/` (di-gitignore).
 docs/                  Dokumentasi
 e2e/smoke.spec.ts      Playwright E2E smoke (npm run test:e2e)
 playwright.config.ts   Playwright config + webServer
-supabase/schema.sql    Skema DB + RLS + seed (untuk mode Supabase)
+supabase/
+  config.toml          Konfigurasi stack lokal (supabase start)
+  migrations/          Migrasi + seed (dipakai CI/local CLI)
+  schema.sql           Skema DB + RLS + seed (paste ke SQL Editor prod)
 src/
   components/          Layout, UI kecil
   hooks/               useAuth, useData
@@ -122,7 +137,7 @@ src/
     supabase.ts        Deteksi mode / lazy client
     csv.ts             Export CSV
   pages/               Login, Dashboard, RoomDetail, ManageRooms, History
-.github/workflows/     Deploy Pages + keep-alive Supabase
+.github/workflows/     Deploy Pages + keep-alive + E2E (Supabase lokal di CI)
 ```
 
 ## Mode data
@@ -134,7 +149,7 @@ src/
 
 Reset dummy: DevTools → `localStorage.clear()` lalu reload.
 
-**Satu environment (free tier):** Supabase = production only. Unit test & E2E **selalu dummy** (di-paksa di config) — jangan arahkan test ke project production agar data tidak tabrak. Dev harian: jalankan tanpa `.env` (atau `VITE_DUMMY=1`) kecuali sengaja mengetes API.
+**Satu environment (free tier):** Supabase hosted = production only. Unit test & E2E lokal **selalu dummy** (di-paksa di config) — jangan arahkan test ke project production agar data tidak tabrak. E2E CI memakai **stack Supabase self-hosted di runner** (terisolasi, data tiap job bersih). Dev harian: jalankan tanpa `.env` (atau `VITE_DUMMY=1`) kecuali sengaja mengetes API.
 
 ## Conventions
 

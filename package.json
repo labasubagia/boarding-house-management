@@ -14,6 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "VITE_DUMMY=1 playwright test",
     "test:e2e:ui": "VITE_DUMMY=1 playwright test --ui",
+    "test:e2e:supabase": "playwright test",
     "test:secrets": "gitleaks detect --redact --no-banner",
     "typecheck": "tsc -b",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
