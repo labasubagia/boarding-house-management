@@ -36,19 +36,23 @@ jobs:
 
       - name: Export Supabase env for the app
         run: |
-          supabase status -o env \
-            --override-name api.url=VITE_SUPABASE_URL \
-            --override-name auth.anon_key=VITE_SUPABASE_ANON_KEY \
-            --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY \
-            >> "$GITHUB_ENV"
+          # status -o env is shell-sourceable (quoted values) — eval so GITHUB_ENV gets clean values
+          eval "$(supabase status -o env)"
+          test -n "$API_URL" || { echo "API_URL empty after supabase status" >&2; exit 1; }
+          {
+            echo "VITE_SUPABASE_URL=${API_URL}"
+            echo "VITE_SUPABASE_ANON_KEY=${PUBLISHABLE_KEY:-${ANON_KEY}}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SECRET_KEY:-${SERVICE_ROLE_KEY}}"
+          } >> "$GITHUB_ENV"
 
       - name: Create E2E test user
         run: |
-          curl -fsS -X POST "$VITE_SUPABASE_URL/auth/v1/admin/users" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+          echo "Creating user at ${VITE_SUPABASE_URL}/auth/v1/admin/users"
+          curl -fsS -X POST "${VITE_SUPABASE_URL}/auth/v1/admin/users" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
-            -d "{\"email\":\"$E2E_EMAIL\",\"password\":\"$E2E_PASSWORD\",\"email_confirm\":true}"
+            -d "{\"email\":\"${E2E_EMAIL}\",\"password\":\"${E2E_PASSWORD}\",\"email_confirm\":true}"
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
