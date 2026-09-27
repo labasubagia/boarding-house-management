@@ -21,7 +21,7 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "src/**/*.{ts,tsx}": [
+    "src/**/!(*.test).{ts,tsx}": [
       "npx --no-install oxlint --fix"
     ]
   },
