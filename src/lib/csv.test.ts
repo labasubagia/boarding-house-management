@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { formatCsvCell } from './csv'
+import { describe, expect, it, vi } from 'vitest'
+import { downloadCsv, formatCsvCell } from './csv'
 
 
 describe('CSV export', () => {
@@ -34,5 +34,46 @@ describe('CSV export', () => {
     expect(formatCsvCell('=SUM(A1:A2)')).toBe("'=SUM(A1:A2)")
     expect(formatCsvCell('+1500000')).toBe("'+1500000")
     expect(formatCsvCell('@user')).toBe("'@user")
+  })
+})
+
+describe('downloadCsv', () => {
+  it('builds blob CSV, triggers anchor download, revokes URL', async () => {
+    const created: Blob[] = []
+    const revoked: string[] = []
+    const clicked: HTMLAnchorElement[] = []
+    vi.stubGlobal('URL', {
+      createObjectURL: (b: Blob) => {
+        created.push(b)
+        return 'blob:mock'
+      },
+      revokeObjectURL: (u: string) => {
+        revoked.push(u)
+      },
+    })
+    const origCreate = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation(((
+      tag: string,
+    ) => {
+      const el = origCreate(tag as 'a') as HTMLAnchorElement
+      if (tag === 'a') {
+        el.click = () => {
+          clicked.push(el)
+        }
+      }
+      return el
+    }) as unknown as typeof document.createElement)
+    downloadCsv('bayar.csv', [
+      ['Gedung', 'Kamar'],
+      ['Gedung A', 1],
+    ])
+    expect(created).toHaveLength(1)
+    expect(await created[0].text()).toContain('Gedung,Kamar')
+    expect(clicked).toHaveLength(1)
+    expect(clicked[0].download).toBe('bayar.csv')
+    expect(clicked[0].href).toContain('blob:mock')
+    expect(revoked).toEqual(['blob:mock'])
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 })

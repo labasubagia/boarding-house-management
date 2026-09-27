@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import {
   getSession,
+  onAuthChange,
   signInWithPassword,
   signOut,
 } from './auth'
@@ -35,5 +36,25 @@ describe('dummy auth flow', () => {
     await signInWithPassword('ibu@kos.test', 'rahasia')
     await signOut()
     expect(await getSession()).toBeNull()
+  })
+})
+
+describe('onAuthChange listener', () => {
+  it('subscribe → emit on signIn/signOut → unsubscribe stops', async () => {
+    const seen: (string | null)[] = []
+    const off1 = onAuthChange((s) => {
+      seen.push(s?.user.email ?? null)
+    })
+    const off2 = onAuthChange(() => {})
+    await signInWithPassword('listener@kos.test', 'rahasia')
+    await signOut()
+    off2()
+    await signInWithPassword('kedua@kos.test', 'rahasia')
+    await signOut()
+    off1()
+    expect(seen).toEqual(['listener@kos.test', null, 'kedua@kos.test', null])
+    await signInWithPassword('ketiga@kos.test', 'rahasia')
+    expect(seen).toHaveLength(4)
+    await signOut()
   })
 })

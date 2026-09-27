@@ -13,6 +13,8 @@ import {
   insertTenant,
   moveOutTenant,
   recordPayments,
+  resetDummyData,
+  updateRoom,
   updateTenant,
   upsertPayment,
 } from './api'
@@ -371,6 +373,13 @@ describe('persistence', () => {
     expect(loaded.buildings).toHaveLength(db.buildings.length)
     expect(loaded.rooms).toHaveLength(db.rooms.length)
   })
+
+  it('corrupt JSON falls back to fresh seed', () => {
+    localStorage.setItem('kos-tracker-db-v1', '{rusak')
+    const loaded = loadDb()
+    expect(loaded.buildings).toHaveLength(2)
+    expect(loaded.rooms).toHaveLength(10)
+  })
 })
 
 describe('friendlyDbError', () => {
@@ -494,5 +503,64 @@ describe('fetchPaymentsForTenants (batched, no N+1)', () => {
     )
     expect(await fetchPaymentsForTenants(['tenant-tak-ada'])).toEqual([])
     expect(await fetchPaymentsForTenants([])).toEqual([])
+  })
+})
+
+describe('api dummy gaps', () => {
+  it('updateRoom renames and reprices', async () => {
+    await insertBuilding('Gedung R')
+    const { buildings } = await fetchBase()
+    const b = buildings.find((x) => x.name === 'Gedung R')!
+    await insertRoom({ building_id: b.id, name: '9', rent: 1000000 })
+    const room = (await fetchBase()).rooms.find((r) => r.building_id === b.id)!
+    await updateRoom(room.id, { building_id: b.id, name: '10', rent: 2000000 })
+    const after = (await fetchBase()).rooms.find((r) => r.id === room.id)!
+    expect(after.name).toBe('10')
+    expect(Number(after.rent)).toBe(2000000)
+  })
+
+  it('recordPayments rejects empty batch', async () => {
+    const { tenant } = await seedTenantAndGetRoom()
+    await expect(
+      recordPayments({
+        tenant_id: tenant.id,
+        move_in_date: tenant.move_in_date,
+        paid_date: '2026-03-10',
+        notes: null,
+        items: [],
+      }),
+    ).rejects.toThrow('minimal 1 bulan')
+  })
+
+  it('resetDummyData restores seed after mutation', async () => {
+    await insertBuilding('Gedung Hilang')
+    expect((await fetchBase()).buildings.some((b) => b.name === 'Gedung Hilang')).toBe(true)
+    await resetDummyData()
+    const base = await fetchBase()
+    expect(base.buildings.some((b) => b.name === 'Gedung Hilang')).toBe(false)
+    expect(base.buildings).toHaveLength(2)
+  })
+
+  it('friendlyDbError maps remaining branches', () => {
+    expect(friendlyDbError({ code: '23505', message: 'duplicate key buildings' }).message).toMatch(
+      'Nama gedung sudah ada',
+    )
+    expect(friendlyDbError({ code: '23505', message: 'duplicate key rooms' }).message).toMatch(
+      'Nama kamar sudah ada',
+    )
+    expect(friendlyDbError({ code: '23505', message: 'duplicate key payments x' }).message).toMatch(
+      'sudah tercatat',
+    )
+    expect(friendlyDbError({ code: '23505', message: 'duplicate key other' }).message).toMatch(
+      'Data sudah ada',
+    )
+    expect(friendlyDbError({ code: '23514', message: 'check move_out bad' }).message).toMatch(
+      'keluar tidak valid',
+    )
+    expect(friendlyDbError({ code: '23514', message: 'check name bad' }).message).toMatch('wajib diisi')
+    expect(friendlyDbError({ code: '23514', message: 'check other' }).message).toMatch('tidak valid')
+    expect(friendlyDbError({ code: '23503', message: 'fk fail' }).message).toMatch('tidak ditemukan')
+    expect(friendlyDbError({ message: 'Gagal X' }).message).toBe('Gagal X')
+    expect(friendlyDbError({}).message).toMatch('Gagal menyimpan')
   })
 })

@@ -140,10 +140,27 @@ test.describe('Multi-month payments', () => {
     await page.fill('input[type="text"][placeholder="transfer / tunai"]', 'e2e-multi')
     await page.locator('form button[type="submit"]').click()
     await expect(page.locator('text=Lunas 4 bulan')).toBeVisible()
-
     // 4 payment rows share the same paid date + notes
     await expect(page.locator('main li', { hasText: 'e2e-multi' })).toHaveCount(4)
 
+    // Delete flow: confirm dialog → newest (advance) row removed, month back in checklist
+    page.once('dialog', (d) => void d.accept())
+    await page.locator('main li', { hasText: 'e2e-multi' }).first().locator('button:has-text("Hapus")').click()
+    await expect(page.locator('text=Pembayaran dihapus')).toBeVisible()
+    await expect(page.locator('main li', { hasText: 'e2e-multi' })).toHaveCount(3)
+    await page.click('main button:has-text("Catat bayar")')
+    await expect(page.locator('form input[type="checkbox"]')).toHaveCount(2)
+    await page.locator('form button:has-text("Batal")').click()
+    // Re-pay deleted advance month to restore 4-row state for CSV/history asserts below
+    await page.click('main button:has-text("Catat bayar")')
+    const reboxes = page.locator('form input[type="checkbox"]')
+    await expect(reboxes).toHaveCount(2)
+    for (const b of await reboxes.all()) await b.uncheck()
+    await reboxes.first().check()
+    await page.fill('input[type="text"][placeholder="transfer / tunai"]', 'e2e-multi')
+    await page.locator('form button[type="submit"]').click()
+    await expect(page.locator('text=Pembayaran tersimpan')).toBeVisible()
+    await expect(page.locator('main li', { hasText: 'e2e-multi' })).toHaveCount(4)
     // Reopen: paid months gone from checklist, arrears badge cleared
     await page.click('main button:has-text("Catat bayar")')
     await expect(page.locator('form input[type="checkbox"]')).toHaveCount(1)

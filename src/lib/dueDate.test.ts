@@ -3,6 +3,7 @@ import {
   arrearsBefore,
   computeStatus,
   dueDateForMonth,
+  formatCurrency,
   formatDateID,
   formatMonthID,
   isPastDue,
@@ -10,6 +11,7 @@ import {
   monthKeyToDate,
   occupantForMonth,
   overdueBefore,
+  periodMonthEquals,
   roomStatus,
   shiftMonth,
   startOfMonth,
@@ -285,5 +287,31 @@ describe('occupantForMonth — future tenant invisible', () => {
     expect(occupantForMonth([t], 'r9', '2026-08')).toBeUndefined()
     expect(occupantForMonth([t], 'r9', '2026-09')?.id).toBe('new')
     expect(unpaidThrough(t.move_in_date, [], '2026-08')).toEqual([])
+  })
+})
+
+describe('boundary coverage', () => {
+  it('periodMonthEquals matches exact month only', () => {
+    expect(periodMonthEquals('2026-01-01', '2026-01')).toBe(true)
+    expect(periodMonthEquals('2026-02-01', '2026-01')).toBe(false)
+    // A naive startsWith on '2026-1' would also match '2026-10'; exact slice avoids it
+    expect(periodMonthEquals('2026-10-01', '2026-10')).toBe(true)
+  })
+
+  it('formatCurrency renders IDR without decimals', () => {
+    const s = formatCurrency(1500000)
+    expect(s).toContain('Rp')
+    expect(s).not.toContain(',00')
+  })
+
+  it('moved-out tenant with past move_out stays visible that month', () => {
+    const t = tenant({ id: 'old', room_id: 'r1', move_in_date: '2026-01-05', is_active: false, move_out_date: '2026-02-10' })
+    expect(occupantForMonth([t], 'r1', '2026-02')?.id).toBe('old')
+    const gone = tenant({ id: 'gone', room_id: 'r1', move_in_date: '2026-01-05', is_active: false, move_out_date: '2026-01-20' })
+    expect(occupantForMonth([gone], 'r1', '2026-02')).toBeUndefined()
+  })
+
+  it('roomStatus null tenant is kosong', () => {
+    expect(roomStatus({ tenant: null, paidKeys: [], monthKey: '2026-02' })).toBe('kosong')
   })
 })
