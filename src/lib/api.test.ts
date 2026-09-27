@@ -11,6 +11,7 @@ import {
   insertRoom,
   insertTenant,
   moveOutTenant,
+  recordPayments,
   updateTenant,
   upsertPayment,
 } from './api'
@@ -390,5 +391,81 @@ describe('friendlyDbError', () => {
   it('passes unknown errors through', () => {
     const e = new Error('boom')
     expect(friendlyDbError(e)).toBe(e)
+  })
+})
+
+describe('recordPayments batch', () => {
+  it('records 3 months at once (arrears + current)', async () => {
+    const { tenant } = await seedTenantAndGetRoom()
+    const r = await recordPayments({
+      tenant_id: tenant.id,
+      move_in_date: tenant.move_in_date,
+      paid_date: '2026-03-10',
+      notes: 'rapel',
+      items: [
+        { period_month: '2026-01-01', amount: 1500000 },
+        { period_month: '2026-02-01', amount: 1500000 },
+        { period_month: '2026-03-01', amount: 1500000 },
+      ],
+    })
+    expect(r.count).toBe(3)
+    const payments = await fetchPaymentsForTenant(tenant.id)
+    expect(payments).toHaveLength(3)
+    expect(payments.every((p) => p.paid_date === '2026-03-10')).toBe(true)
+  })
+
+  it('rejects duplicate periods in one batch', async () => {
+    const { tenant } = await seedTenantAndGetRoom()
+    await expect(
+      recordPayments({
+        tenant_id: tenant.id,
+        move_in_date: tenant.move_in_date,
+        paid_date: '2026-03-10',
+        notes: null,
+        items: [
+          { period_month: '2026-02-01', amount: 1500000 },
+          { period_month: '2026-02-01', amount: 1500000 },
+        ],
+      }),
+    ).rejects.toThrow('duplikat')
+  })
+
+  it('rejects period before move-in', async () => {
+    const { tenant } = await seedTenantAndGetRoom()
+    await expect(
+      recordPayments({
+        tenant_id: tenant.id,
+        move_in_date: tenant.move_in_date,
+        paid_date: '2026-03-10',
+        notes: null,
+        items: [{ period_month: '2025-12-01', amount: 1500000 }],
+      }),
+    ).rejects.toThrow('sebelum tanggal masuk')
+  })
+
+  it('arrears payment flips terlambat to lunas', async () => {
+    const { tenant } = await seedTenantAndGetRoom() // move-in 2026-01-17
+    const before = computeStatus({
+      tenant,
+      hasPayment: false,
+      monthKey: '2026-01',
+      today: new Date(2026, 1, 10),
+    })
+    expect(before).toBe('terlambat')
+    await recordPayments({
+      tenant_id: tenant.id,
+      move_in_date: tenant.move_in_date,
+      paid_date: '2026-02-05',
+      notes: null,
+      items: [{ period_month: '2026-01-01', amount: 1500000 }],
+    })
+    const payments = await fetchPaymentsForMonth('2026-01')
+    const after = computeStatus({
+      tenant,
+      hasPayment: payments.some((p) => p.tenant_id === tenant.id),
+      monthKey: '2026-01',
+      today: new Date(2026, 1, 10),
+    })
+    expect(after).toBe('lunas')
   })
 })

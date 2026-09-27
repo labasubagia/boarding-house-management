@@ -6,9 +6,11 @@ import {
   formatMonthID,
   isPastDue,
   monthKeyToDate,
+  shiftMonth,
   startOfMonth,
   toLocalISO,
   toMonthKey,
+  unpaidPeriods,
 } from './dueDate'
 import type { Tenant } from './types'
 
@@ -24,7 +26,7 @@ function tenant(overrides: Partial<Tenant> = {}): Tenant {
     move_out_date: null,
     created_at: '2026-01-17T00:00:00.000Z',
     ...overrides,
-  }
+  } as Tenant
 }
 
 describe('toMonthKey / monthKeyToDate / startOfMonth', () => {
@@ -214,5 +216,25 @@ describe('locale formatting', () => {
   it('formatDateID renders a date without timezone shift', () => {
     expect(formatDateID('2026-01-17')).toContain('2026')
     expect(formatDateID('2026-01-17')).toContain('17')
+  })
+})
+
+describe('shiftMonth / unpaidPeriods', () => {
+  it('shifts across year boundary', () => {
+    expect(shiftMonth('2026-12', 1)).toBe('2027-01')
+    expect(shiftMonth('2026-01', -1)).toBe('2025-12')
+  })
+
+  it('lists arrears + current + 2 future, skips paid', () => {
+    expect(unpaidPeriods('2026-01-17', ['2026-02-01'], '2026-03')).toEqual([
+      '2026-01',
+      '2026-03',
+      '2026-04',
+      '2026-05',
+    ])
+  })
+
+  it('skips months before move-in', () => {
+    expect(unpaidPeriods('2026-03-10', [], '2026-03')).toEqual(['2026-03', '2026-04', '2026-05'])
   })
 })

@@ -86,9 +86,7 @@ test.describe('Kos Tracker smoke', () => {
       await expect(page.locator('h2:text-is("Catat pembayaran")')).toBeVisible()
       await page.fill('input[type="text"][placeholder="transfer / tunai"]', 'e2e-cash')
       await page.locator('form button[type="submit"]:has-text("Simpan")').click()
-      await expect(page.locator('text=Pembayaran tersimpan')).toBeVisible()
-      await expect(page.locator('span:text-is("Lunas")').first()).toBeVisible()
-      await expect(page.locator('button:has-text("Sudah lunas bulan ini")')).toBeVisible()
+      await expect(page.locator('text=/Pembayaran tersimpan|Lunas \\d+ bulan/')).toBeVisible()
       await expect(page.locator('text=e2e-cash')).toBeVisible()
     }
 

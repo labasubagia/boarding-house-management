@@ -14,11 +14,32 @@ export function monthKeyToDate(monthKey: string): Date {
   const [y, m] = monthKey.split('-').map(Number)
   return new Date(y, m - 1, 1)
 }
+/** Shift `YYYY-MM` by n months (negative = backward). */
+export function shiftMonth(monthKey: string, n: number): string {
+  const d = monthKeyToDate(monthKey)
+  return toMonthKey(new Date(d.getFullYear(), d.getMonth() + n, 1))
+}
 /** Exact `YYYY-MM-01` period match (AVOID startsWith: monthKey prefix collisions). */
 export function periodMonthEquals(periodMonth: string, monthKey: string): boolean {
   return periodMonth.slice(0, 7) === monthKey
 }
-
+/**
+ * Unpaid billable months: from tenant move-in month through `currentKey + future`.
+ * Skips paid keys. `ponytail:` fixed +2 window; add `future` param when advance-pay policy changes.
+ */
+export function unpaidPeriods(
+  moveInDate: string,
+  paidKeys: Iterable<string>,
+  currentKey: string,
+  future = 2,
+): string[] {
+  const paid = new Set([...paidKeys].map((k) => k.slice(0, 7)))
+  const start = moveInDate.slice(0, 7)
+  const end = shiftMonth(currentKey, future)
+  const out: string[] = []
+  for (let k = start; k <= end; k = shiftMonth(k, 1)) out.push(k)
+  return out.filter((k) => !paid.has(k))
+}
 export function formatMonthID(monthKey: string): string {
   return monthKeyToDate(monthKey).toLocaleDateString('id-ID', {
     month: 'long',

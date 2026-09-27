@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import StatusBadge from '../components/StatusBadge'
@@ -16,11 +16,11 @@ import {
   formatDateID,
   formatCurrency,
   formatMonthID,
-  periodMonthEquals,
   toLocalISO,
   toMonthKey,
+  unpaidPeriods,
 } from '../lib/dueDate'
-import { deletePayment, insertTenant, moveOutTenant, updateTenant, upsertPayment } from '../lib/api'
+import { deletePayment, insertTenant, moveOutTenant, recordPayments, updateTenant } from '../lib/api'
 import type { Tenant } from '../lib/types'
 
 export default function RoomDetail() {
@@ -81,8 +81,11 @@ export default function RoomDetail() {
   if (!room) return <p className="text-sm text-slate-500">Kamar tidak ditemukan.</p>
 
   const monthKey = toMonthKey(new Date())
-  const paidThisMonth =
-    activeTenant && payments.some((p) => periodMonthEquals(p.period_month, monthKey))
+  const paidKeys = new Set(payments.map((p) => p.period_month.slice(0, 7)))
+  const paidThisMonth = activeTenant ? paidKeys.has(monthKey) : false
+  const overdueCount = activeTenant
+    ? unpaidPeriods(activeTenant.move_in_date, paidKeys, monthKey, 0).filter((k) => k < monthKey).length
+    : 0
   const status = computeStatus({
     tenant: activeTenant,
     hasPayment: Boolean(paidThisMonth),
@@ -139,12 +142,8 @@ export default function RoomDetail() {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                className={buttonPrimary}
-                onClick={() => setShowPay(true)}
-                disabled={Boolean(paidThisMonth)}
-              >
-                {paidThisMonth ? 'Sudah lunas bulan ini' : 'Catat bayar'}
+              <button className={buttonPrimary} onClick={() => setShowPay(true)}>
+                {overdueCount > 0 ? `Catat bayar · nunggak ${overdueCount}` : 'Catat bayar'}
               </button>
               <button
                 className={buttonSecondary}
@@ -232,12 +231,13 @@ export default function RoomDetail() {
         <PaymentModal
           tenant={activeTenant}
           monthKey={monthKey}
+          paidKeys={paidKeys}
           defaultAmount={Number(activeTenant.rent)}
           onClose={() => setShowPay(false)}
-          onSaved={async () => {
+          onSaved={async (count) => {
             setShowPay(false)
             await refreshPayments()
-            setMsg('Pembayaran tersimpan.')
+            setMsg(count > 1 ? `Lunas ${count} bulan.` : 'Pembayaran tersimpan.')
           }}
         />
       )}
@@ -270,35 +270,60 @@ export default function RoomDetail() {
 function PaymentModal({
   tenant,
   monthKey,
+  paidKeys,
   defaultAmount,
   onClose,
   onSaved,
 }: {
   tenant: Tenant
   monthKey: string
+  paidKeys: Set<string>
   defaultAmount: number
   onClose: () => void
-  onSaved: () => void | Promise<void>
+  onSaved: (count: number) => void | Promise<void>
 }) {
+  const periods = useMemo(
+    () => unpaidPeriods(tenant.move_in_date, paidKeys, monthKey, 2),
+    [tenant.move_in_date, paidKeys, monthKey],
+  )
+  const defaultChecked = useMemo(() => new Set(periods.filter((k) => k <= monthKey)), [periods, monthKey])
+  const [checked, setChecked] = useState<Set<string>>(defaultChecked)
+  const [amounts, setAmounts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(periods.map((k) => [k, String(defaultAmount)])),
+  )
   const [paidDate, setPaidDate] = useState(toLocalISO(new Date()))
-  const [amount, setAmount] = useState(String(defaultAmount))
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  function toggle(k: string) {
+    setChecked((prev) => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+  }
+
+  const total = periods
+    .filter((k) => checked.has(k))
+    .reduce((sum, k) => sum + (Number(amounts[k]) || 0), 0)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError(null)
     try {
-      await upsertPayment({
+      const { count } = await recordPayments({
         tenant_id: tenant.id,
-        period_month: `${monthKey}-01`,
+        move_in_date: tenant.move_in_date,
         paid_date: paidDate,
-        amount: Number(amount),
         notes: notes.trim() || null,
+        items: periods
+          .filter((k) => checked.has(k))
+          .map((k) => ({ period_month: `${k}-01`, amount: Number(amounts[k]) })),
       })
-      await onSaved()
+      await onSaved(count)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -309,9 +334,37 @@ function PaymentModal({
   return (
     <Modal title="Catat pembayaran" onClose={onClose}>
       <form onSubmit={submit}>
-        <p className="text-sm text-slate-500 mb-3">
-          Periode: <strong>{formatMonthID(monthKey)}</strong> · {tenant.name}
-        </p>
+        <p className="text-sm text-slate-500 mb-3">{tenant.name} · centang bulan yang dibayar</p>
+        <div className="space-y-2 mb-3">
+          {periods.map((k) => (
+            <label key={k} className="flex items-center gap-3 text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <input
+                type="checkbox"
+                checked={checked.has(k)}
+                onChange={() => toggle(k)}
+                aria-label={formatMonthID(k)}
+              />
+              <span className="flex-1">
+                {formatMonthID(k)}
+                {k < monthKey && <span className="ml-2 text-xs text-red-600">nunggak</span>}
+                {k > monthKey && <span className="ml-2 text-xs text-slate-400">muka</span>}
+              </span>
+              <input
+                type="number"
+                required={checked.has(k)}
+                min="0"
+                step="1000"
+                className="w-32 border border-slate-300 rounded-lg px-2 py-1 text-right"
+                value={amounts[k] ?? ''}
+                onChange={(e) => setAmounts((prev) => ({ ...prev, [k]: e.target.value }))}
+                aria-label={`Nominal ${formatMonthID(k)}`}
+              />
+            </label>
+          ))}
+          {periods.length === 0 && (
+            <p className="text-sm text-slate-400">Semua periode sampai 2 bulan ke depan sudah lunas.</p>
+          )}
+        </div>
         <Field label="Tanggal bayar">
           <input
             type="date"
@@ -319,17 +372,6 @@ function PaymentModal({
             className={inputClass}
             value={paidDate}
             onChange={(e) => setPaidDate(e.target.value)}
-          />
-        </Field>
-        <Field label="Jumlah (Rp)">
-          <input
-            type="number"
-            required
-            min="0"
-            step="1000"
-            className={inputClass}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
           />
         </Field>
         <Field label="Catatan (opsional)">
@@ -342,9 +384,9 @@ function PaymentModal({
           />
         </Field>
         {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
-        <div className="flex gap-2">
-          <button type="submit" disabled={saving} className={buttonPrimary}>
-            {saving ? 'Menyimpan…' : 'Simpan'}
+        <div className="flex gap-2 items-center">
+          <button type="submit" disabled={saving || checked.size === 0} className={buttonPrimary}>
+            {saving ? 'Menyimpan…' : `Simpan (${formatCurrency(total)})`}
           </button>
           <button type="button" className={buttonSecondary} onClick={onClose}>
             Batal

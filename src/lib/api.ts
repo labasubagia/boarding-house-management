@@ -334,6 +334,32 @@ export async function moveOutTenant(id: string): Promise<void> {
 
 // ---- Payments ----
 
+/** Batch record N months in one call; rejects dup periods + pre-move-in periods. */
+export async function recordPayments(input: {
+  tenant_id: string
+  move_in_date: string
+  paid_date: string
+  notes: string | null
+  items: { period_month: string; amount: number }[]
+}): Promise<{ count: number }> {
+  const paidDate = reqDate(input.paid_date, 'Tanggal bayar')
+  const notes = input.notes?.trim() || null
+  if (input.items.length === 0) throw new Error('Pilih minimal 1 bulan.')
+  const seen = new Set<string>()
+  const start = input.move_in_date.slice(0, 7)
+  const clean = input.items.map((it) => {
+    const period = reqDate(it.period_month, 'Periode')
+    if (period.slice(0, 7) < start) throw new Error('Periode sebelum tanggal masuk.')
+    if (seen.has(period)) throw new Error('Periode duplikat.')
+    seen.add(period)
+    return { tenant_id: input.tenant_id, period_month: period, amount: reqMoney(it.amount, 'Jumlah') }
+  })
+  for (const c of clean) {
+    await upsertPayment({ ...c, paid_date: paidDate, notes })
+  }
+  return { count: clean.length }
+}
+
 export async function upsertPayment(payload: {
   tenant_id: string
   period_month: string
