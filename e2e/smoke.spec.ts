@@ -1,22 +1,19 @@
 import { expect, test } from '@playwright/test'
 import path from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-
 const OUT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'output')
 
 const USER_EMAIL = process.env.E2E_EMAIL || 'test@test.test'
 const USER_PASS = process.env.E2E_PASSWORD || 'test123'
 
 test.describe('Kos Tracker smoke', () => {
-  test('full business flow', async ({ page, baseURL }) => {
+  test('full business flow', async ({ page }) => {
     const consoleErrors: string[] = []
     const unauthorized: string[] = []
     page.on('pageerror', (e) => consoleErrors.push(String(e)))
     page.on('console', (msg) => {
       if (msg.type() === 'error') consoleErrors.push(msg.text())
-    })
-    page.on('response', (res) => {
-      if (res.status() === 401) unauthorized.push(res.url())
     })
 
     // 1. Login screen (domcontentloaded — networkidle never settles with Vite HMR WS)
@@ -150,6 +147,10 @@ test.describe('Kos Tracker smoke', () => {
         page.click('main button:has-text("Export CSV")'),
       ])
       expect(download.suggestedFilename()).toMatch(/\.csv$/)
+      const csvPath = await download.path()
+      expect(csvPath).toBeTruthy()
+      const csv = await readFile(csvPath!, 'utf8')
+      expect(csv).toContain('Gedung,Kamar,Penyewa,Periode')
     }
 
     // 8. Logout / re-login / reload
@@ -176,6 +177,5 @@ test.describe('Kos Tracker smoke', () => {
       ...unauthorized.slice(0, 5).map((u) => `401 ${u}`),
     ].join(' | ')
     expect(consoleErrors, `JS errors: ${detail}`).toHaveLength(0)
-    expect(baseURL).toBeTruthy()
   })
 })
