@@ -64,3 +64,18 @@ Pada hari jatuh tempo sendiri status masih **belum** (jadi sempat bayar di hari 
 2. Bayar **5 Feb 2026** (awal) → status Feb **lunas**; jatuh tempo Mar tetap **17 Mar**.
 3. **18 Feb** belum bayar → status **terlambat**.
 4. Keluar tenant → kamar **kosong**, data bayar historis tetap ada.
+
+## 7. Batasan database
+
+App validasi dulu (`src/lib/api.ts`: `reqName`, `reqMoney`, `reqDate`), DB jadi jaring pengaman
+(`supabase/schema.sql` + `supabase/migrations/20260927000000_constraints.sql`):
+
+| Batasan | Aturan |
+| --- | --- |
+| `UNIQUE(buildings.name)` | Nama gedung tidak dobel |
+| `UNIQUE(building_id, name)` rooms | Nama kamar unik per gedung |
+| `UNIQUE(room_id) WHERE is_active` | Satu penyewa aktif per kamar |
+| `CHECK (rent >= 0)` rooms/tenants | Sewa tidak negatif |
+| `CHECK (amount > 0)` payments | Nominal bayar positif |
+| `CHECK (btrim(name) <> '')` | Nama tidak kosong |
+| `updated_at` + trigger | Otomatis terisi saat update |

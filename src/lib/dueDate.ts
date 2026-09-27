@@ -14,6 +14,10 @@ export function monthKeyToDate(monthKey: string): Date {
   const [y, m] = monthKey.split('-').map(Number)
   return new Date(y, m - 1, 1)
 }
+/** Exact `YYYY-MM-01` period match (AVOID startsWith: monthKey prefix collisions). */
+export function periodMonthEquals(periodMonth: string, monthKey: string): boolean {
+  return periodMonth.slice(0, 7) === monthKey
+}
 
 export function formatMonthID(monthKey: string): string {
   return monthKeyToDate(monthKey).toLocaleDateString('id-ID', {
@@ -84,6 +88,27 @@ export function computeStatus(opts: {
   // Viewing a month before move-in: not renting yet → not overdue (docs: belum dianggap jatuh tempo)
   if (!due) return 'belum'
   return isPastDue(due, today) ? 'terlambat' : 'belum'
+}
+
+/**
+ * Occupant billed for a room in `monthKey`: active tenant wins; else tenant
+ * whose [move_in, move_out) covers the month (keeps past months `lunas`,
+ * not `kosong`, after move-out).
+ */
+export function occupantForMonth(
+  tenants: Tenant[],
+  roomId: string,
+  monthKey: string,
+): Tenant | undefined {
+  const inRoom = tenants.filter((t) => t.room_id === roomId)
+  const active = inRoom.find((t) => t.is_active)
+  if (active) return active
+  const monthStart = `${monthKey}-01`
+  const dated = inRoom.filter((t) => t.move_in_date.slice(0, 7) <= monthKey)
+  dated.sort((a, b) => b.move_in_date.localeCompare(a.move_in_date))
+  return dated.find(
+    (t) => !t.move_out_date || t.move_out_date >= monthStart,
+  )
 }
 
 export const STATUS_LABEL: Record<RoomStatus, string> = {

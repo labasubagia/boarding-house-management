@@ -6,6 +6,7 @@ import {
   fetchBase,
   fetchPaymentsForMonth,
   fetchPaymentsForTenant,
+  friendlyDbError,
   insertBuilding,
   insertRoom,
   insertTenant,
@@ -15,7 +16,6 @@ import {
 } from './api'
 import { loadDb, resetDb, saveDb, seedDb } from './localStore'
 import { computeStatus, dueDateForMonth, toLocalISO } from './dueDate'
-
 function clearStorage() {
   localStorage.clear()
   resetDb()
@@ -322,6 +322,45 @@ describe('update tenant details', () => {
   })
 })
 
+describe('input validation', () => {
+  it('rejects empty building/room/tenant names', async () => {
+    await expect(insertBuilding('   ')).rejects.toThrow('wajib diisi')
+    const { buildings } = await fetchBase()
+    await expect(insertRoom({ building_id: buildings[0].id, name: '  ', rent: 1000000 })).rejects.toThrow(
+      'wajib diisi',
+    )
+  })
+
+  it('rejects negative rent/amount and bad dates', async () => {
+    const { room, tenant } = await seedTenantAndGetRoom()
+    await expect(
+      insertTenant({ room_id: room.id, name: 'X', phone: null, move_in_date: '2026-02-30', rent: 1000000 }),
+    ).rejects.toThrow('tidak valid')
+    await expect(
+      upsertPayment({ tenant_id: tenant.id, period_month: '2026-02-01', paid_date: '2026-02-10', amount: Number.NaN, notes: null }),
+    ).rejects.toThrow('≥ 0')
+    await expect(fetchPaymentsForMonth('2026-13')).rejects.toThrow('tidak valid')
+  })
+
+  it('rejects second active tenant in same room', async () => {
+    const { room } = await seedTenantAndGetRoom()
+    await expect(
+      insertTenant({ room_id: room.id, name: 'Kedua', phone: null, move_in_date: '2026-02-01', rent: 1000000 }),
+    ).rejects.toThrow('sudah terisi')
+  })
+
+  it('sorts room names naturally (2 before 10)', async () => {
+    await insertBuilding('Gedung Sort')
+    const { buildings } = await fetchBase()
+    const b = buildings.find((x) => x.name === 'Gedung Sort')!
+    await insertRoom({ building_id: b.id, name: '10', rent: 1000000 })
+    await insertRoom({ building_id: b.id, name: '2', rent: 1000000 })
+    const after = await fetchBase()
+    const names = after.rooms.filter((r) => r.building_id === b.id).map((r) => r.name)
+    expect(names).toEqual(['2', '10'])
+  })
+})
+
 describe('persistence', () => {
   it('saveDb/loadDb round-trips', () => {
     const db = seedDb()
@@ -329,5 +368,27 @@ describe('persistence', () => {
     const loaded = loadDb()
     expect(loaded.buildings).toHaveLength(db.buildings.length)
     expect(loaded.rooms).toHaveLength(db.rooms.length)
+  })
+})
+
+describe('friendlyDbError', () => {
+  it('maps duplicate active tenant to Indonesian', () => {
+    expect(
+      friendlyDbError({ code: '23505', message: 'duplicate key uniq_active_tenant_per_room' }).message,
+    ).toMatch('sudah terisi')
+  })
+
+  it('maps check violations to Indonesian', () => {
+    expect(
+      friendlyDbError({ code: '23514', message: 'check constraint chk_tenants_rent_nonneg' }).message,
+    ).toMatch('≥ 0')
+    expect(
+      friendlyDbError({ code: '23514', message: 'check constraint chk_payments_amount_pos' }).message,
+    ).toMatch('> 0')
+  })
+
+  it('passes unknown errors through', () => {
+    const e = new Error('boom')
+    expect(friendlyDbError(e)).toBe(e)
   })
 })

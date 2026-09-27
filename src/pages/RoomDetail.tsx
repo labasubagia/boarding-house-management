@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import StatusBadge from '../components/StatusBadge'
@@ -9,24 +9,24 @@ import {
   buttonSecondary,
   inputClass,
 } from '../components/form'
-import { fetchPaymentsForTenant, useBaseData } from '../hooks/useData'
+import { useBaseData, usePaymentsForTenant } from '../hooks/useData'
 import {
   computeStatus,
   dueDateForMonth,
   formatDateID,
   formatCurrency,
   formatMonthID,
+  periodMonthEquals,
   toLocalISO,
   toMonthKey,
 } from '../lib/dueDate'
 import { deletePayment, insertTenant, moveOutTenant, updateTenant, upsertPayment } from '../lib/api'
-import type { Payment, Tenant } from '../lib/types'
+import type { Tenant } from '../lib/types'
 
 export default function RoomDetail() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
   const { buildings, rooms, tenants, loading, error, reload } = useBaseData()
-  const [payments, setPayments] = useState<Payment[]>([])
   const [showPay, setShowPay] = useState(false)
   const [showTenant, setShowTenant] = useState(false)
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null)
@@ -41,47 +41,11 @@ export default function RoomDetail() {
     .sort((a, b) => b.move_in_date.localeCompare(a.move_in_date))
 
   const tenantId = activeTenant?.id ?? null
-
-  useEffect(() => {
-    let cancelled = false
-    if (!tenantId) {
-      setPayments([])
-      return
-    }
-    fetchPaymentsForTenant(tenantId)
-      .then((data) => {
-        if (!cancelled) setPayments(data)
-      })
-      .catch((e: Error) => {
-        if (!cancelled) setErr(e.message)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [tenantId])
-
-  if (loading) return <p className="text-sm text-slate-500">Memuat…</p>
-  if (error) return <p className="text-sm text-red-600">{error}</p>
-  if (!room) return <p className="text-sm text-slate-500">Kamar tidak ditemukan.</p>
-
-  const monthKey = toMonthKey(new Date())
-  const paidThisMonth =
-    activeTenant && payments.some((p) => p.period_month.startsWith(monthKey))
-  const status = computeStatus({
-    tenant: activeTenant,
-    hasPayment: Boolean(paidThisMonth),
-    monthKey,
-  })
-  const due = activeTenant ? dueDateForMonth(activeTenant.move_in_date, monthKey) : null
+  const { payments, error: payError, reload: reloadPayments } = usePaymentsForTenant(tenantId)
 
   async function refreshPayments() {
-    if (!tenantId) return
-    try {
-      setPayments(await fetchPaymentsForTenant(tenantId))
-      setErr(null)
-    } catch (fetchErr) {
-      setErr((fetchErr as Error).message)
-    }
+    await reloadPayments()
+    setErr(null)
   }
 
   async function moveOut() {
@@ -112,6 +76,19 @@ export default function RoomDetail() {
     }
   }
 
+  if (loading) return <p className="text-sm text-slate-500">Memuat…</p>
+  if (error) return <p className="text-sm text-red-600">{error}</p>
+  if (!room) return <p className="text-sm text-slate-500">Kamar tidak ditemukan.</p>
+
+  const monthKey = toMonthKey(new Date())
+  const paidThisMonth =
+    activeTenant && payments.some((p) => periodMonthEquals(p.period_month, monthKey))
+  const status = computeStatus({
+    tenant: activeTenant,
+    hasPayment: Boolean(paidThisMonth),
+    monthKey,
+  })
+  const due = activeTenant ? dueDateForMonth(activeTenant.move_in_date, monthKey) : null
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-2">
@@ -131,9 +108,9 @@ export default function RoomDetail() {
           {msg}
         </p>
       )}
-      {err && (
+      {(err || payError) && (
         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {err}
+          {err ?? payError}
         </p>
       )}
 

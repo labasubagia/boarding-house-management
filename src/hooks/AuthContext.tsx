@@ -20,6 +20,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       setSession(s)
       setLoading(false)
+    }).catch(() => {
+      if (!cancelled) setLoading(false)
     })
     const unsub = onAuthChange((s) => {
       if (cancelled) return

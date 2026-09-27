@@ -22,7 +22,7 @@ Tanpa `.env`, aplikasi berjalan dalam **mode dummy** (localStorage + seed contoh
 | `npm run build` | Typecheck + production build → `dist/` |
 | `npm run typecheck` | `tsc -b` saja |
 | `npm run lint` | **oxlint** lint `src/` |
-| `npm run lint:fix` / `npm run format` | oxlint auto-fix (format + lint fixes) |
+| `npm run lint:fix` | oxlint auto-fix (lint + style fixes) |
 | `npm run test` | Vitest run sekali (CI) — selalu dummy mode (abaikan `.env`) |
 | `npm run test:watch` | Vitest watch mode |
 | `npm run test:coverage` | Vitest + coverage |
@@ -39,7 +39,7 @@ Konfigurasi: [`.oxlintrc.json`](../.oxlintrc.json)
 
 - Plugin: React, TypeScript, oxc
 - Kategori: `correctness` = error; `suspicious` / `style` = warn
-- Auto-fix: `npm run format` (setara `oxlint src --fix`)
+- Auto-fix: `npm run lint:fix` (setara `oxlint src --fix`)
 
 oxlint menangani lint **dan** perbaikan style otomatis yang tersedia — tidak perlu Prettier/Biome di project ini.
 

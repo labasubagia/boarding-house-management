@@ -1,44 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import MonthPicker from '../components/MonthPicker'
 import { buttonSecondary } from '../components/form'
-import { fetchPaymentsForMonth, useBaseData } from '../hooks/useData'
+import { useBaseData, usePaymentsForMonth } from '../hooks/useData'
 import { downloadCsv } from '../lib/csv'
 import { formatDateID, formatCurrency, toMonthKey } from '../lib/dueDate'
-import type { Payment } from '../lib/types'
 
 export default function History() {
   const { buildings, rooms, tenants, loading, error } = useBaseData()
   const [monthKey, setMonthKey] = useState(() => toMonthKey(new Date()))
-  const [payments, setPayments] = useState<Payment[]>([])
-  const [loadedMonth, setLoadedMonth] = useState<string | null>(null)
-  const [payError, setPayError] = useState<string | null>(null)
-  const payLoading = loadedMonth !== monthKey
+  const { payments, loading: payLoading, error: payError } = usePaymentsForMonth(monthKey)
 
-  useEffect(() => {
-    let cancelled = false
-    fetchPaymentsForMonth(monthKey)
-      .then((data) => {
-        if (cancelled) return
-        setPayments(data)
-        setLoadedMonth(monthKey)
-        setPayError(null)
-      })
-      .catch((e: Error) => {
-        if (cancelled) return
-        setPayError(e.message)
-        setLoadedMonth(monthKey)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [monthKey])
-
+  const tenantById = useMemo(() => new Map(tenants.map((t) => [t.id, t])), [tenants])
+  const roomById = useMemo(() => new Map(rooms.map((r) => [r.id, r])), [rooms])
+  const buildingById = useMemo(() => new Map(buildings.map((b) => [b.id, b])), [buildings])
   const rows = useMemo(() => {
     if (payLoading) return []
     return payments.map((p) => {
-      const tenant = tenants.find((t) => t.id === p.tenant_id)
-      const room = tenant ? rooms.find((r) => r.id === tenant.room_id) : undefined
-      const building = room ? buildings.find((b) => b.id === room.building_id) : undefined
+      const tenant = tenantById.get(p.tenant_id)
+      const room = tenant ? roomById.get(tenant.room_id) : undefined
+      const building = room ? buildingById.get(room.building_id) : undefined
       return {
         payment: p,
         tenantName: tenant?.name ?? '—',
@@ -46,7 +26,7 @@ export default function History() {
         buildingName: building?.name ?? '—',
       }
     })
-  }, [payments, tenants, rooms, buildings, payLoading])
+  }, [payments, tenantById, roomById, buildingById, payLoading])
 
   const total = payLoading
     ? 0

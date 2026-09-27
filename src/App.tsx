@@ -9,29 +9,19 @@ import RoomDetail from './pages/RoomDetail'
 import ManageRooms from './pages/ManageRooms'
 import History from './pages/History'
 
-function RequireAuth({ children }: { children: ReactNode }) {
-  const { session, loading } = useAuth()
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
-        Memuat…
-      </div>
-    )
-  }
-  if (!session) return <Navigate to="/login" replace />
-  return <>{children}</>
+function AuthLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
+      Memuat…
+    </div>
+  )
 }
 
-function RedirectIfAuthed({ children }: { children: ReactNode }) {
+function AuthGate({ children, when }: { children: ReactNode; when: 'authed' | 'guest' }) {
   const { session, loading } = useAuth()
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
-        Memuat…
-      </div>
-    )
-  }
-  if (session) return <Navigate to="/" replace />
+  if (loading) return <AuthLoading />
+  if (when === 'authed' && !session) return <Navigate to="/login" replace />
+  if (when === 'guest' && session) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -43,16 +33,16 @@ export default function App() {
           <Route
             path="/login"
             element={
-              <RedirectIfAuthed>
+              <AuthGate when="guest">
                 <Login />
-              </RedirectIfAuthed>
+              </AuthGate>
             }
           />
           <Route
             element={
-              <RequireAuth>
+              <AuthGate when="authed">
                 <Layout />
-              </RequireAuth>
+              </AuthGate>
             }
           >
             <Route path="/" element={<Dashboard />} />

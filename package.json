@@ -8,7 +8,6 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint src",
     "lint:fix": "oxlint src --fix",
-    "format": "oxlint src --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -23,7 +22,7 @@
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
-      "oxlint --fix"
+      "npx --no-install oxlint --fix"
     ]
   },
   "dependencies": {
