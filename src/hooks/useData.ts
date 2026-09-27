@@ -3,6 +3,7 @@ import {
   fetchBase,
   fetchPaymentsForMonth as apiFetchMonth,
   fetchPaymentsForTenant as apiFetchTenant,
+  fetchPaymentsForTenants as apiFetchTenants,
 } from '../lib/api'
 import type { Building, Payment, Room, Tenant } from '../lib/types'
 
@@ -120,8 +121,16 @@ export function usePaymentsForTenant(tenantId: string | null): {
   return { payments, error, reload }
 }
 
+/** Group flat payment rows by requested tenant ids (missing → empty array). */
+export function groupPaymentsByTenant(rows: Payment[], tenantIds: string[]): Map<string, Payment[]> {
+  const grouped = new Map<string, Payment[]>()
+  for (const id of tenantIds) grouped.set(id, [])
+  for (const p of rows) grouped.get(p.tenant_id)?.push(p)
+  return grouped
+}
+
 /**
- * All payments for given tenants (one fetch each, parallel).
+ * All payments for given tenants (single batched query, grouped client-side).
  * Needed for arrears-aware status: per-month fetch hides unpaid past months.
  */
 export function useAllPayments(tenantIds: string[]): {
@@ -130,7 +139,7 @@ export function useAllPayments(tenantIds: string[]): {
 } {
   const [byTenant, setByTenant] = useState<Map<string, Payment[]>>(new Map())
   const [error, setError] = useState<string | null>(null)
-  const key = tenantIds.join(',')
+  const key = [...tenantIds].sort().join(',')
 
   useEffect(() => {
     let cancelled = false
@@ -139,10 +148,10 @@ export function useAllPayments(tenantIds: string[]): {
       setError(null)
       return
     }
-    Promise.all(tenantIds.map((id) => apiFetchTenant(id).then((rows) => [id, rows] as const)))
-      .then((entries) => {
+    apiFetchTenants(tenantIds)
+      .then((rows) => {
         if (cancelled) return
-        setByTenant(new Map(entries))
+        setByTenant(groupPaymentsByTenant(rows, tenantIds))
         setError(null)
       })
       .catch((e: Error) => {

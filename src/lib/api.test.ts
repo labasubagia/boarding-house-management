@@ -6,6 +6,7 @@ import {
   fetchBase,
   fetchPaymentsForMonth,
   fetchPaymentsForTenant,
+  fetchPaymentsForTenants,
   friendlyDbError,
   insertBuilding,
   insertRoom,
@@ -467,5 +468,31 @@ describe('recordPayments batch', () => {
       today: new Date(2026, 1, 10),
     })
     expect(after).toBe('lunas')
+  })
+})
+
+describe('fetchPaymentsForTenants (batched, no N+1)', () => {
+  it('returns one round trip covering all ids, empty array for unknown tenant', async () => {
+    const first = await seedTenantAndGetRoom()
+    const second = await seedTenantAndGetRoom()
+    for (const [t, period] of [
+      [first.tenant, '2026-01-01'],
+      [second.tenant, '2026-02-01'],
+    ] as const) {
+      await upsertPayment({
+        tenant_id: t.id,
+        period_month: period,
+        paid_date: '2026-02-10',
+        amount: 1500000,
+        notes: null,
+      })
+    }
+    const rows = await fetchPaymentsForTenants([first.tenant.id, second.tenant.id])
+    expect(rows).toHaveLength(2)
+    expect(new Set(rows.map((p) => p.tenant_id))).toEqual(
+      new Set([first.tenant.id, second.tenant.id]),
+    )
+    expect(await fetchPaymentsForTenants(['tenant-tak-ada'])).toEqual([])
+    expect(await fetchPaymentsForTenants([])).toEqual([])
   })
 })

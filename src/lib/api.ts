@@ -153,7 +153,25 @@ export async function fetchPaymentsForTenant(tenantId: string): Promise<Payment[
   return data ?? []
 }
 
-// ---- Buildings ----
+/** Single batched query for many tenants (AVOIDs N+1: 1 round trip, not N). */
+export async function fetchPaymentsForTenants(tenantIds: string[]): Promise<Payment[]> {
+  if (tenantIds.length === 0) return []
+  if (!isSupabaseConfigured) {
+    const db = loadDb()
+    const wanted = new Set(tenantIds)
+    return db.payments
+      .filter((p) => wanted.has(p.tenant_id))
+      .sort((a, b) => b.period_month.localeCompare(a.period_month))
+  }
+  const supabase = await getSupabase()
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .in('tenant_id', tenantIds)
+    .order('period_month', { ascending: false })
+  if (error) throw friendlyDbError(error)
+  return data ?? []
+}
 
 export async function insertBuilding(name: string): Promise<void> {
   const clean = reqName(name, 'Nama gedung')
