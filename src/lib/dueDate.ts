@@ -48,9 +48,25 @@ export function arrearsBefore(moveInDate: string, paidKeys: Iterable<string>, mo
 export function unpaidThrough(moveInDate: string, paidKeys: Iterable<string>, monthKey: string): string[] {
   return unpaidPeriods(moveInDate, paidKeys, monthKey, 0)
 }
+/** True when billing period's due date has passed (overdue debt, not just unpaid early). */
+export function isOverduePeriod(moveInDate: string, periodKey: string, today: Date = new Date()): boolean {
+  const due = dueDateForMonth(moveInDate, periodKey)
+  return due !== null && isPastDue(due, today)
+}
+/** Past unpaid periods whose due date has passed (`nunggak`; excludes not-yet-due). */
+export function overdueBefore(
+  moveInDate: string,
+  paidKeys: Iterable<string>,
+  monthKey: string,
+  today: Date = new Date(),
+): string[] {
+  return arrearsBefore(moveInDate, paidKeys, monthKey).filter((k) => isOverduePeriod(moveInDate, k, today))
+}
 /**
  * Room status with arrears override: paid current month + unpaid past
  * still `terlambat` so debt never hides behind "lunas bulan ini".
+ * `nunggak` = due date passed (`overdueBefore`), not merely calendar-past:
+ * viewing next month never marks not-yet-due periods as overdue.
  */
 export function roomStatus(opts: {
   tenant: Tenant | null | undefined
@@ -59,10 +75,11 @@ export function roomStatus(opts: {
   today?: Date
 }): RoomStatus {
   const { tenant, paidKeys, monthKey, today } = opts
+  const now = today ?? new Date()
   if (!tenant) return 'kosong'
   const paid = new Set([...paidKeys].map((k) => k.slice(0, 7)))
-  if (arrearsBefore(tenant.move_in_date, paid, monthKey).length > 0) return 'terlambat'
-  return computeStatus({ tenant, hasPayment: paid.has(monthKey), monthKey, today })
+  if (overdueBefore(tenant.move_in_date, paid, monthKey, now).length > 0) return 'terlambat'
+  return computeStatus({ tenant, hasPayment: paid.has(monthKey), monthKey, today: now })
 }
 export function formatMonthID(monthKey: string): string {
   return monthKeyToDate(monthKey).toLocaleDateString('id-ID', {

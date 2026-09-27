@@ -9,6 +9,7 @@ import {
   formatCurrency,
   formatDateID,
   occupantForMonth,
+  overdueBefore,
   roomStatus,
   toLocalISO,
   toMonthKey,
@@ -55,15 +56,16 @@ export default function Dashboard() {
       const tenantPayments = t ? (byTenant.get(t.id) ?? []) : []
       const paidKeys = new Set(tenantPayments.map((p) => p.period_month.slice(0, 7)))
       const paid = t ? paidKeys.has(monthKey) : false
-      const arrears = t ? arrearsBefore(t.move_in_date, paidKeys, monthKey) : []
+      const billable = t ? arrearsBefore(t.move_in_date, paidKeys, monthKey) : []
+      const overdue = t ? overdueBefore(t.move_in_date, paidKeys, monthKey, new Date()) : []
       const status = roomStatus({ tenant: t, paidKeys, monthKey })
       if (status === 'lunas' && t) {
         collected += Number(tenantPayments.find((p) => p.period_month.slice(0, 7) === monthKey)?.amount ?? 0)
       } else if (status !== 'kosong' && t) {
-        outstanding += arrears.length * Number(t.rent) + (paid ? 0 : Number(t.rent))
+        outstanding += billable.length * Number(t.rent) + (paid ? 0 : Number(t.rent))
         if (status === 'terlambat') overdueRooms += 1
       }
-      cards.push({ room: r, tenant: t, paid, arrears, status })
+      cards.push({ room: r, tenant: t, paid, arrears: overdue, status })
     }
     return { totals: { collected, outstanding, overdue: overdueRooms }, rows: cards }
   }, [rooms, occupantByRoom, byTenant, monthKey])

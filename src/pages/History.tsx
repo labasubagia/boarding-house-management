@@ -5,11 +5,11 @@ import { buttonSecondary } from '../components/form'
 import { useAllPayments, useBaseData, usePaymentsForMonth } from '../hooks/useData'
 import { downloadCsv } from '../lib/csv'
 import {
-  arrearsBefore,
   formatCurrency,
   formatDateID,
   formatMonthID,
   occupantForMonth,
+  overdueBefore,
   toMonthKey,
   unpaidThrough,
 } from '../lib/dueDate'
@@ -45,13 +45,16 @@ export default function History() {
       .filter((t) => t !== undefined)
     return [...new Map(list.map((t) => [t.id, t])).values()]
   }, [rooms, tenants, monthKey])
-  const { byTenant } = useAllPayments(tab === 'belum' ? occupants.map((t) => t.id) : [])
+  const { byTenant } = useAllPayments(occupants.map((t) => t.id))
 
   // Unpaid periods through the viewed month (arrears + current), one row per month.
+  // `nunggak` = due date passed (`overdueBefore`), not merely calendar-past:
+  // viewing next month never marks not-yet-due periods as overdue.
   const dueRows = useMemo(() => {
-    if (tab === 'lunas') return []
+    const now = new Date()
     return occupants.flatMap((t) => {
       const paidKeys = new Set((byTenant.get(t.id) ?? []).map((p) => p.period_month.slice(0, 7)))
+      const overdue = new Set(overdueBefore(t.move_in_date, paidKeys, monthKey, now))
       return unpaidThrough(t.move_in_date, paidKeys, monthKey).map((k) => {
         const room = roomById.get(t.room_id)
         const building = room ? buildingById.get(room.building_id) : undefined
@@ -59,14 +62,14 @@ export default function History() {
           key: `${t.id}-${k}`,
           tenant: t,
           period: k,
-          isArrears: arrearsBefore(t.move_in_date, paidKeys, monthKey).includes(k),
+          isArrears: overdue.has(k),
           roomName: room ? `Kamar ${room.name}` : '—',
           roomId: room?.id ?? '',
           buildingName: building?.name ?? '—',
         }
       })
     })
-  }, [tab, occupants, byTenant, roomById, buildingById, monthKey])
+  }, [occupants, byTenant, roomById, buildingById, monthKey])
 
   const total = payLoading ? 0 : payments.reduce((sum, p) => sum + Number(p.amount), 0)
 
@@ -128,22 +131,21 @@ export default function History() {
 
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm text-slate-600">
-          {tab === 'lunas' ? (
-            payLoading ? (
-              'Memuat…'
-            ) : (
-              <>
-                {payments.length} pembayaran · Total <strong>{formatCurrency(total)}</strong>
-              </>
-            )
+          {payLoading ? (
+            'Memuat…'
           ) : (
             <>
-              {dueRows.length} belum bayar
-              {dueRows.length > 0 && (
+              {payments.length} pembayaran, {dueRows.filter((r) => r.isArrears).length} nunggak
+              {tab === 'lunas' ? (
                 <>
-                  {' '}
-                  · Total <strong>{formatCurrency(dueRows.reduce((s, r) => s + Number(r.tenant.rent), 0))}</strong>
+                  {' '}· Total <strong>{formatCurrency(total)}</strong>
                 </>
+              ) : (
+                dueRows.length > 0 && (
+                  <>
+                    {' '}· Total <strong>{formatCurrency(dueRows.reduce((s, r) => s + Number(r.tenant.rent), 0))}</strong>
+                  </>
+                )
               )}
             </>
           )}

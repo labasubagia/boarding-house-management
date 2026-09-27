@@ -26,13 +26,14 @@ dueDate = min(day(move_in_date), lastDayOfMonth(month))
 | `belum` | Ada penyewa, belum bayar, dan (**hari ini ≤ jatuh tempo** ATAU bulan sebelum `move_in_date`) |
 | `terlambat` | Belum bayar bulan ini DAN/ATAU masih ada bulan lalu yang belum dibayar |
 
-Prioritas: `kosong` → (`terlambat` bila ada tunggakan, walau bulan ini lunas) → `lunas` → `terlambat` / `belum`.
+Prioritas: `kosong` → (`terlambat` bila ada tunggakan lewat jatuh tempo, walau bulan ini lunas) → `lunas` → `terlambat` / `belum`.
 
 Pada hari jatuh tempo sendiri status masih **belum** (jadi sempat bayar di hari H tanpa dianggap telat).
 
 Tunggakan tidak pernah sembunyi di balik "lunas bulan ini": bayar bulan berjalan tapi bulan lalu
 masih kosong → badge tetap **Terlambat** + label `Nunggak N bulan` di Dashboard dan tombol kamar.
-Implementasi: `roomStatus()` / `arrearsBefore()` di `src/lib/dueDate.ts`.
+`nunggak` = jatuh tempo periode itu sudah lewat (`overdueBefore()` / `isOverduePeriod()` di `src/lib/dueDate.ts`),
+bukan sekadar kalender lewat: lihat bulan depan tidak menandai bulan ini `nunggak` sebelum tanggal jatuh temponya.
 
 ## 3. Pembayaran (bisa multi-bulan sekaligus)
 
@@ -63,7 +64,8 @@ Implementasi: `roomStatus()` / `arrearsBefore()` di `src/lib/dueDate.ts`.
 ## 6. Riwayat & CSV
 
 - Tab `Lunas`: filter per bulan via `period_month` (hari-1 … hari-akhir bulan itu); kolom CSV: Gedung, Kamar, Penyewa, Periode, Tgl Bayar, Jumlah, Catatan.
-- Tab `Belum bayar`: semua periode belum dibayar s/d bulan dipilih (tunggakan + bulan ini, label `nunggak` untuk bulan lalu), tiap baris ada tautan `Bayar` ke kamar; CSV: Gedung, Kamar, Penyewa, Periode, Status, Jumlah.
+- Tab `Belum bayar`: semua periode belum dibayar s/d bulan dipilih (tunggakan + bulan ini, label `nunggak` hanya bila jatuh tempo periode itu sudah lewat), tiap baris ada tautan `Bayar` ke kamar; CSV: Gedung, Kamar, Penyewa, Periode, Status, Jumlah.
+- Ringkasan lintas tab: kedua tab tampilkan `{N} pembayaran, {M} nunggak` (+ Total sesuai tab) agar tak perlu cek manual per tab.
 - Dashboard sadar tunggakan: status kamar + total Belum/Terlambat hitung dari semua pembayaran tenant (bukan cuma bulan tampil); label `Nunggak N bulan`.
 
 ## Contoh skenario (diuji di test)

@@ -11,11 +11,11 @@ import {
 } from '../components/form'
 import { useBaseData, usePaymentsForTenant } from '../hooks/useData'
 import {
-  arrearsBefore,
   dueDateForMonth,
   formatDateID,
   formatCurrency,
   formatMonthID,
+  overdueBefore,
   roomStatus,
   toLocalISO,
   toMonthKey,
@@ -83,7 +83,7 @@ export default function RoomDetail() {
   const monthKey = toMonthKey(new Date())
   const paidKeys = new Set(payments.map((p) => p.period_month.slice(0, 7)))
   const overdueCount = activeTenant
-    ? arrearsBefore(activeTenant.move_in_date, paidKeys, monthKey).length
+    ? overdueBefore(activeTenant.move_in_date, paidKeys, monthKey, new Date()).length
     : 0
   const status = roomStatus({ tenant: activeTenant, paidKeys, monthKey })
   const due = activeTenant ? dueDateForMonth(activeTenant.move_in_date, monthKey) : null

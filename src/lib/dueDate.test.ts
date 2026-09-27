@@ -6,8 +6,10 @@ import {
   formatDateID,
   formatMonthID,
   isPastDue,
+  isOverduePeriod,
   monthKeyToDate,
   occupantForMonth,
+  overdueBefore,
   roomStatus,
   shiftMonth,
   startOfMonth,
@@ -258,10 +260,22 @@ describe('arrearsBefore / unpaidThrough / roomStatus', () => {
 
   it('paid current month with unpaid arrears stays terlambat', () => {
     const t = tenant({ move_in_date: '2026-01-05' })
-    expect(roomStatus({ tenant: t, paidKeys: ['2026-03'], monthKey: '2026-03' })).toBe('terlambat')
+    const past = new Date(2026, 3, 20)
+    expect(roomStatus({ tenant: t, paidKeys: ['2026-03'], monthKey: '2026-03', today: past })).toBe('terlambat')
     expect(
-      roomStatus({ tenant: t, paidKeys: ['2026-01', '2026-02', '2026-03'], monthKey: '2026-03' }),
+      roomStatus({ tenant: t, paidKeys: ['2026-01', '2026-02', '2026-03'], monthKey: '2026-03', today: past }),
     ).toBe('lunas')
+  })
+
+  it('viewing next month never marks not-yet-due as nunggak', () => {
+    const t = tenant({ move_in_date: '2026-09-10' })
+    const beforeDue = new Date(2026, 8, 5)
+    expect(overdueBefore(t.move_in_date, [], '2026-10', beforeDue)).toEqual([])
+    expect(isOverduePeriod(t.move_in_date, '2026-09', beforeDue)).toBe(false)
+    expect(roomStatus({ tenant: t, paidKeys: [], monthKey: '2026-10', today: beforeDue })).toBe('belum')
+    const afterDue = new Date(2026, 9, 15)
+    expect(overdueBefore(t.move_in_date, [], '2026-10', afterDue)).toEqual(['2026-09'])
+    expect(roomStatus({ tenant: t, paidKeys: [], monthKey: '2026-10', today: afterDue })).toBe('terlambat')
   })
 })
 
