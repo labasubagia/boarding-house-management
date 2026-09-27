@@ -2,24 +2,23 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import MonthPicker from '../components/MonthPicker'
 import StatusBadge from '../components/StatusBadge'
-import { useBaseData, usePaymentsForMonth } from '../hooks/useData'
+import { useAllPayments, useBaseData } from '../hooks/useData'
 import {
-  computeStatus,
+  arrearsBefore,
   dueDateForMonth,
   formatCurrency,
   formatDateID,
   occupantForMonth,
+  roomStatus,
   toLocalISO,
   toMonthKey,
 } from '../lib/dueDate'
-import type { Room, Tenant } from '../lib/types'
+import type { Room, RoomStatus, Tenant } from '../lib/types'
 
 export default function Dashboard() {
   const { buildings, rooms, tenants, loading, error, reload } = useBaseData()
   const [monthKey, setMonthKey] = useState(() => toMonthKey(new Date()))
-  const { payments, error: payError } = usePaymentsForMonth(monthKey)
 
-  const paidTenantIds = useMemo(() => new Set(payments.map((p) => p.tenant_id)), [payments])
   const roomsByBuilding = useMemo(() => {
     const m = new Map<string, Room[]>()
     for (const r of rooms) {
@@ -34,21 +33,41 @@ export default function Dashboard() {
     for (const r of rooms) m.set(r.id, occupantForMonth(tenants, r.id, monthKey))
     return m
   }, [rooms, tenants, monthKey])
-  const totals = useMemo(() => {
+  const occupants = useMemo(
+    () => [...new Set(occupantByRoom.values())].filter((t) => t !== undefined),
+    [occupantByRoom],
+  )
+  const { byTenant, error: payError } = useAllPayments(occupants.map((t) => t.id))
+
+  const { totals, rows } = useMemo(() => {
     let collected = 0
     let outstanding = 0
-    let overdue = 0
+    let overdueRooms = 0
+    const cards: {
+      room: Room
+      tenant: Tenant | undefined
+      paid: boolean
+      arrears: string[]
+      status: RoomStatus
+    }[] = []
     for (const r of rooms) {
       const t = occupantByRoom.get(r.id)
-      const status = computeStatus({ tenant: t, hasPayment: t ? paidTenantIds.has(t.id) : false, monthKey })
-      if (status === 'lunas') collected += Number(payments.find((p) => p.tenant_id === t?.id)?.amount ?? 0)
-      else if (status === 'terlambat') {
-        overdue += 1
-        outstanding += Number(t?.rent ?? 0)
-      } else if (status === 'belum' && t) outstanding += Number(t.rent)
+      const tenantPayments = t ? (byTenant.get(t.id) ?? []) : []
+      const paidKeys = new Set(tenantPayments.map((p) => p.period_month.slice(0, 7)))
+      const paid = t ? paidKeys.has(monthKey) : false
+      const arrears = t ? arrearsBefore(t.move_in_date, paidKeys, monthKey) : []
+      const status = roomStatus({ tenant: t, paidKeys, monthKey })
+      if (status === 'lunas' && t) {
+        collected += Number(tenantPayments.find((p) => p.period_month.slice(0, 7) === monthKey)?.amount ?? 0)
+      } else if (status !== 'kosong' && t) {
+        outstanding += arrears.length * Number(t.rent) + (paid ? 0 : Number(t.rent))
+        if (status === 'terlambat') overdueRooms += 1
+      }
+      cards.push({ room: r, tenant: t, paid, arrears, status })
     }
-    return { collected, outstanding, overdue }
-  }, [rooms, occupantByRoom, paidTenantIds, payments, monthKey])
+    return { totals: { collected, outstanding, overdue: overdueRooms }, rows: cards }
+  }, [rooms, occupantByRoom, byTenant, monthKey])
+  const rowsByRoom = useMemo(() => new Map(rows.map((r) => [r.room.id, r])), [rows])
   if (loading) return <p className="text-sm text-slate-500">Memuat…</p>
   if (error) {
     return (
@@ -80,15 +99,19 @@ export default function Dashboard() {
               {building.name}
             </h2>
             <div className="grid gap-2">
-              {buildingRooms.map((room) => (
-                <RoomRow
-                  key={room.id}
-                  room={room}
-                  monthKey={monthKey}
-                  tenant={occupantByRoom.get(room.id)}
-                  paid={paidTenantIds.has(occupantByRoom.get(room.id)?.id ?? '')}
-                />
-              ))}
+              {buildingRooms.map((room) => {
+                const row = rowsByRoom.get(room.id)
+                return (
+                  <RoomRow
+                    key={room.id}
+                    room={room}
+                    monthKey={monthKey}
+                    tenant={row?.tenant}
+                    status={row?.status ?? 'kosong'}
+                    arrears={row?.arrears ?? []}
+                  />
+                )
+              })}
               {buildingRooms.length === 0 && (
                 <p className="text-sm text-slate-400">Belum ada kamar.</p>
               )}
@@ -110,14 +133,15 @@ function RoomRow({
   room,
   monthKey,
   tenant,
-  paid,
+  status,
+  arrears,
 }: {
   room: Room
   monthKey: string
   tenant: Tenant | undefined
-  paid: boolean
+  status: RoomStatus
+  arrears: string[]
 }) {
-  const status = computeStatus({ tenant, hasPayment: paid, monthKey })
   const due =
     tenant && status !== 'lunas' && status !== 'kosong'
       ? dueDateForMonth(tenant.move_in_date, monthKey)
@@ -136,13 +160,15 @@ function RoomRow({
           ) : null}
         </div>
         <div className="text-xs text-slate-500">
-          {due
-            ? `Jatuh tempo ${formatDateID(toLocalISO(due))}`
-            : !tenant
-              ? 'Tidak ada penyewa'
-              : status === 'lunas'
-                ? 'Sudah lunas'
-                : 'Belum berlaku'}
+          {arrears.length > 0
+            ? `Nunggak ${arrears.length} bulan`
+            : due
+              ? `Jatuh tempo ${formatDateID(toLocalISO(due))}`
+              : !tenant
+                ? 'Tidak ada penyewa'
+                : status === 'lunas'
+                  ? 'Sudah lunas'
+                  : 'Belum berlaku'}
         </div>
       </div>
       <StatusBadge status={status} />

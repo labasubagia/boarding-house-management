@@ -1,13 +1,23 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import MonthPicker from '../components/MonthPicker'
 import { buttonSecondary } from '../components/form'
-import { useBaseData, usePaymentsForMonth } from '../hooks/useData'
+import { useAllPayments, useBaseData, usePaymentsForMonth } from '../hooks/useData'
 import { downloadCsv } from '../lib/csv'
-import { formatDateID, formatCurrency, toMonthKey } from '../lib/dueDate'
+import {
+  arrearsBefore,
+  formatCurrency,
+  formatDateID,
+  formatMonthID,
+  occupantForMonth,
+  toMonthKey,
+  unpaidThrough,
+} from '../lib/dueDate'
 
 export default function History() {
   const { buildings, rooms, tenants, loading, error } = useBaseData()
   const [monthKey, setMonthKey] = useState(() => toMonthKey(new Date()))
+  const [tab, setTab] = useState<'lunas' | 'belum'>('lunas')
   const { payments, loading: payLoading, error: payError } = usePaymentsForMonth(monthKey)
 
   const tenantById = useMemo(() => new Map(tenants.map((t) => [t.id, t])), [tenants])
@@ -28,11 +38,52 @@ export default function History() {
     })
   }, [payments, tenantById, roomById, buildingById, payLoading])
 
-  const total = payLoading
-    ? 0
-    : payments.reduce((sum, p) => sum + Number(p.amount), 0)
+  // Tenants occupying each room in the viewed month (for arrears computation).
+  const occupants = useMemo(() => {
+    const list = rooms
+      .map((r) => occupantForMonth(tenants, r.id, monthKey))
+      .filter((t) => t !== undefined)
+    return [...new Map(list.map((t) => [t.id, t])).values()]
+  }, [rooms, tenants, monthKey])
+  const { byTenant } = useAllPayments(tab === 'belum' ? occupants.map((t) => t.id) : [])
+
+  // Unpaid periods through the viewed month (arrears + current), one row per month.
+  const dueRows = useMemo(() => {
+    if (tab === 'lunas') return []
+    return occupants.flatMap((t) => {
+      const paidKeys = new Set((byTenant.get(t.id) ?? []).map((p) => p.period_month.slice(0, 7)))
+      return unpaidThrough(t.move_in_date, paidKeys, monthKey).map((k) => {
+        const room = roomById.get(t.room_id)
+        const building = room ? buildingById.get(room.building_id) : undefined
+        return {
+          key: `${t.id}-${k}`,
+          tenant: t,
+          period: k,
+          isArrears: arrearsBefore(t.move_in_date, paidKeys, monthKey).includes(k),
+          roomName: room ? `Kamar ${room.name}` : '—',
+          roomId: room?.id ?? '',
+          buildingName: building?.name ?? '—',
+        }
+      })
+    })
+  }, [tab, occupants, byTenant, roomById, buildingById, monthKey])
+
+  const total = payLoading ? 0 : payments.reduce((sum, p) => sum + Number(p.amount), 0)
 
   function exportCsv() {
+    if (tab === 'belum') {
+      const header = ['Gedung', 'Kamar', 'Penyewa', 'Periode', 'Status', 'Jumlah']
+      const body = dueRows.map((r) => [
+        r.buildingName,
+        r.roomName,
+        r.tenant.name,
+        r.period,
+        r.isArrears ? 'nunggak' : 'belum',
+        Number(r.tenant.rent),
+      ])
+      downloadCsv(`tunggakan-${monthKey}.csv`, [header, ...body])
+      return
+    }
     const header = ['Gedung', 'Kamar', 'Penyewa', 'Periode', 'Tgl Bayar', 'Jumlah', 'Catatan']
     const body = rows.map((r) => [
       r.buildingName,
@@ -56,39 +107,112 @@ export default function History() {
         <MonthPicker value={monthKey} onChange={setMonthKey} />
       </div>
 
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setTab('lunas')}
+          aria-pressed={tab === 'lunas'}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${tab === 'lunas' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'}`}
+        >
+          Lunas
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('belum')}
+          aria-pressed={tab === 'belum'}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${tab === 'belum' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'}`}
+        >
+          Belum bayar
+        </button>
+      </div>
+
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm text-slate-600">
-          {payLoading ? 'Memuat…' : `${payments.length} pembayaran`} · Total{' '}
-          <strong>{formatCurrency(total)}</strong>
+          {tab === 'lunas' ? (
+            payLoading ? (
+              'Memuat…'
+            ) : (
+              <>
+                {payments.length} pembayaran · Total <strong>{formatCurrency(total)}</strong>
+              </>
+            )
+          ) : (
+            <>
+              {dueRows.length} belum bayar
+              {dueRows.length > 0 && (
+                <>
+                  {' '}
+                  · Total <strong>{formatCurrency(dueRows.reduce((s, r) => s + Number(r.tenant.rent), 0))}</strong>
+                </>
+              )}
+            </>
+          )}
         </div>
-        <button className={buttonSecondary} onClick={exportCsv} disabled={payLoading || payments.length === 0}>
+        <button
+          className={buttonSecondary}
+          onClick={exportCsv}
+          disabled={tab === 'lunas' ? payLoading || rows.length === 0 : dueRows.length === 0}
+        >
           Export CSV
         </button>
       </div>
 
-      {payError && <p className="text-sm text-red-600">{payError}</p>}
-      {payLoading ? (
-        <p className="text-sm text-slate-500">Memuat…</p>
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-slate-400">Tidak ada pembayaran untuk bulan ini.</p>
+      {tab === 'lunas' ? (
+        <>
+          {payError && <p className="text-sm text-red-600">{payError}</p>}
+          {payLoading ? (
+            <p className="text-sm text-slate-500">Memuat…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-slate-400">Tidak ada pembayaran untuk bulan ini.</p>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
+              {rows.map((r) => (
+                <div key={r.payment.id} className="px-4 py-3 flex items-center justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">
+                      {r.tenantName}
+                      <span className="font-normal text-slate-500">
+                        {' '}
+                        · {r.buildingName} · {r.roomName}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {formatMonthID(r.payment.period_month.slice(0, 7))} · dibayar{' '}
+                      {formatDateID(r.payment.paid_date)}
+                      {r.payment.notes ? ` · ${r.payment.notes}` : ''}
+                    </div>
+                  </div>
+                  <div className="font-medium whitespace-nowrap">{formatCurrency(Number(r.payment.amount))}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : dueRows.length === 0 ? (
+        <p className="text-sm text-slate-400">Tidak ada tunggakan sampai bulan ini. Semua lunas.</p>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
-          {rows.map((r) => (
-            <div key={r.payment.id} className="px-4 py-3 flex items-center justify-between gap-3 text-sm">
+          {dueRows.map((r) => (
+            <div key={r.key} className="px-4 py-3 flex items-center justify-between gap-3 text-sm">
               <div className="min-w-0">
                 <div className="font-medium truncate">
-                  {r.tenantName}
+                  {r.tenant.name}
                   <span className="font-normal text-slate-500">
                     {' '}
                     · {r.buildingName} · {r.roomName}
                   </span>
+                  {r.isArrears && <span className="ml-2 text-xs text-red-600">nunggak</span>}
                 </div>
-                <div className="text-xs text-slate-500">
-                  {formatDateID(r.payment.paid_date)}
-                  {r.payment.notes ? ` · ${r.payment.notes}` : ''}
-                </div>
+                <div className="text-xs text-slate-500">Periode {formatMonthID(r.period)}</div>
               </div>
-              <div className="font-medium whitespace-nowrap">{formatCurrency(Number(r.payment.amount))}</div>
+              <div className="flex items-center gap-3">
+                <span className="font-medium whitespace-nowrap">{formatCurrency(Number(r.tenant.rent))}</span>
+                {r.roomId && (
+                  <Link to={`/kamar/${r.roomId}`} className="text-xs text-indigo-600 underline">
+                    Bayar
+                  </Link>
+                )}
+              </div>
             </div>
           ))}
         </div>

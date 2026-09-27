@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
+  arrearsBefore,
   computeStatus,
   dueDateForMonth,
   formatDateID,
   formatMonthID,
   isPastDue,
   monthKeyToDate,
+  roomStatus,
   shiftMonth,
   startOfMonth,
   toLocalISO,
   toMonthKey,
   unpaidPeriods,
+  unpaidThrough,
 } from './dueDate'
 import type { Tenant } from './types'
 
@@ -236,5 +239,27 @@ describe('shiftMonth / unpaidPeriods', () => {
 
   it('skips months before move-in', () => {
     expect(unpaidPeriods('2026-03-10', [], '2026-03')).toEqual(['2026-03', '2026-04', '2026-05'])
+  })
+})
+
+describe('arrearsBefore / unpaidThrough / roomStatus', () => {
+  it('arrearsBefore excludes the viewed month', () => {
+    expect(arrearsBefore('2026-01-17', [], '2026-03')).toEqual(['2026-01', '2026-02'])
+    expect(arrearsBefore('2026-03-10', [], '2026-03')).toEqual([])
+  })
+
+  it('unpaidThrough includes arrears + current', () => {
+    expect(unpaidThrough('2026-01-17', ['2026-02-01'], '2026-03')).toEqual([
+      '2026-01',
+      '2026-03',
+    ])
+  })
+
+  it('paid current month with unpaid arrears stays terlambat', () => {
+    const t = tenant({ move_in_date: '2026-01-05' })
+    expect(roomStatus({ tenant: t, paidKeys: ['2026-03'], monthKey: '2026-03' })).toBe('terlambat')
+    expect(
+      roomStatus({ tenant: t, paidKeys: ['2026-01', '2026-02', '2026-03'], monthKey: '2026-03' }),
+    ).toBe('lunas')
   })
 })

@@ -22,22 +22,29 @@ dueDate = min(day(move_in_date), lastDayOfMonth(month))
 | Status | Syarat |
 | --- | --- |
 | `kosong` | Tidak ada penyewa aktif di kamar |
-| `lunas` | Ada baris `payments` untuk `(tenant_id, period_month)` bulan itu |
+| `lunas` | Bulan itu dibayar DAN tidak ada tunggakan bulan sebelumnya |
 | `belum` | Ada penyewa, belum bayar, dan (**hari ini ≤ jatuh tempo** ATAU bulan sebelum `move_in_date`) |
-| `terlambat` | Ada penyewa, belum bayar, **hari ini > akhir hari jatuh tempo**, dan bulan ≥ bulan masuk |
+| `terlambat` | Belum bayar bulan ini DAN/ATAU masih ada bulan lalu yang belum dibayar |
 
-Prioritas: `kosong` → `lunas` → `terlambat` / `belum`.
+Prioritas: `kosong` → (`terlambat` bila ada tunggakan, walau bulan ini lunas) → `lunas` → `terlambat` / `belum`.
 
 Pada hari jatuh tempo sendiri status masih **belum** (jadi sempat bayar di hari H tanpa dianggap telat).
 
-## 3. Pembayaran
+Tunggakan tidak pernah sembunyi di balik "lunas bulan ini": bayar bulan berjalan tapi bulan lalu
+masih kosong → badge tetap **Terlambat** + label `Nunggak N bulan` di Dashboard dan tombol kamar.
+Implementasi: `roomStatus()` / `arrearsBefore()` di `src/lib/dueDate.ts`.
+
+## 3. Pembayaran (bisa multi-bulan sekaligus)
 
 | Aturan | Detail |
 | --- | --- |
 | Unique per periode | Satu baris per `(tenant_id, period_month)` — upsert menimpa, tidak dobel |
-| `period_month` | Selalu tanggal 1 bulan berikutnya (`YYYY-MM-01`) |
+| `period_month` | Selalu tanggal 1 bulan itu (`YYYY-MM-01`) |
+| Batch | `recordPayments()` catat N bulan sekaligus (tunggakan + kini + muka), satu `paid_date`/catatan bersama |
+| Validasi batch | Tolak pilihan kosong, periode dobel dalam batch, periode sebelum bulan masuk |
 | `paid_date` | Tanggal uang diterima (boleh lebih awal dari jatuh tempo) |
 | Hapus | Mengembalikan status bulan itu ke `belum` / `terlambat` |
+| Jendela tagih | `unpaidPeriods()`: bulan masuk s/d bulan kini + 2 bulan muka; yang sudah lunas disembunyikan dari checklist |
 
 ## 4. Penyewa
 
@@ -55,8 +62,9 @@ Pada hari jatuh tempo sendiri status masih **belum** (jadi sempat bayar di hari 
 
 ## 6. Riwayat & CSV
 
-- Filter per bulan: `period_month` antara hari-1 … hari-akhir bulan tersebut.
-- Export CSV kolom: Gedung, Kamar, Penyewa, Periode, Tgl Bayar, Jumlah, Catatan.
+- Tab `Lunas`: filter per bulan via `period_month` (hari-1 … hari-akhir bulan itu); kolom CSV: Gedung, Kamar, Penyewa, Periode, Tgl Bayar, Jumlah, Catatan.
+- Tab `Belum bayar`: semua periode belum dibayar s/d bulan dipilih (tunggakan + bulan ini, label `nunggak` untuk bulan lalu), tiap baris ada tautan `Bayar` ke kamar; CSV: Gedung, Kamar, Penyewa, Periode, Status, Jumlah.
+- Dashboard sadar tunggakan: status kamar + total Belum/Terlambat hitung dari semua pembayaran tenant (bukan cuma bulan tampil); label `Nunggak N bulan`.
 
 ## Contoh skenario (diuji di test)
 
@@ -64,7 +72,8 @@ Pada hari jatuh tempo sendiri status masih **belum** (jadi sempat bayar di hari 
 2. Bayar **5 Feb 2026** (awal) → status Feb **lunas**; jatuh tempo Mar tetap **17 Mar**.
 3. **18 Feb** belum bayar → status **terlambat**.
 4. Keluar tenant → kamar **kosong**, data bayar historis tetap ada.
-
+5. Bayar Mar tapi Jan–Feb kosong → Mar tetap **terlambat** + `Nunggak 2 bulan` (tunggakan override `lunas bulan ini`).
+6. Masuk 1 Jan, bayar Jan+Feb+Mar sekaligus → `recordPayments` 3 baris, satu `paid_date` bersama.
 ## 7. Batasan database
 
 App validasi dulu (`src/lib/api.ts`: `reqName`, `reqMoney`, `reqDate`), DB jadi jaring pengaman

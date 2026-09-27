@@ -11,18 +11,18 @@ import {
 } from '../components/form'
 import { useBaseData, usePaymentsForTenant } from '../hooks/useData'
 import {
-  computeStatus,
+  arrearsBefore,
   dueDateForMonth,
   formatDateID,
   formatCurrency,
   formatMonthID,
+  roomStatus,
   toLocalISO,
   toMonthKey,
   unpaidPeriods,
 } from '../lib/dueDate'
 import { deletePayment, insertTenant, moveOutTenant, recordPayments, updateTenant } from '../lib/api'
 import type { Tenant } from '../lib/types'
-
 export default function RoomDetail() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
@@ -82,15 +82,10 @@ export default function RoomDetail() {
 
   const monthKey = toMonthKey(new Date())
   const paidKeys = new Set(payments.map((p) => p.period_month.slice(0, 7)))
-  const paidThisMonth = activeTenant ? paidKeys.has(monthKey) : false
   const overdueCount = activeTenant
-    ? unpaidPeriods(activeTenant.move_in_date, paidKeys, monthKey, 0).filter((k) => k < monthKey).length
+    ? arrearsBefore(activeTenant.move_in_date, paidKeys, monthKey).length
     : 0
-  const status = computeStatus({
-    tenant: activeTenant,
-    hasPayment: Boolean(paidThisMonth),
-    monthKey,
-  })
+  const status = roomStatus({ tenant: activeTenant, paidKeys, monthKey })
   const due = activeTenant ? dueDateForMonth(activeTenant.move_in_date, monthKey) : null
   return (
     <div className="space-y-5">

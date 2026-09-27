@@ -47,10 +47,24 @@ test.describe('Multi-month payments (dummy)', () => {
     await page.locator('form input[type="date"]').fill(iso(moveIn))
     await page.locator('form button[type="submit"]:has-text("Simpan")').click()
     await expect(page.locator('text=Penyewa ditambahkan')).toBeVisible()
+    // Dashboard hides nothing: Terlambat + Nunggak 2 bulan on the room card
+    await page.click('nav a:has-text("Dashboard")')
+    const card = page.locator('main a', { hasText: 'Kamar M1' }).first()
+    await expect(card).toContainText('Terlambat')
+    await expect(card).toContainText('Nunggak 2 bulan')
 
-    // Arrears badge on button
-    await expect(page.locator('main button:has-text("Catat bayar · nunggak 2")')).toBeVisible()
+    // History Belum bayar tab: 2 arrears + current month, 2 nunggak labels
+    await page.click('nav a:has-text("Riwayat")')
+    await expect(page.locator('h1:has-text("Riwayat pembayaran")')).toBeVisible()
+    await page.locator('main button', { hasText: 'Belum bayar' }).click()
+    const ownDue = page.locator('main div.bg-white > div', { hasText: 'Tenant Multi E2E' })
+    await expect(ownDue).toHaveCount(3)
+    await expect(ownDue.locator('span:text-is("nunggak")')).toHaveCount(2)
 
+    // Back to room detail
+    await page.click('nav a:has-text("Dashboard")')
+    await page.locator('main a', { hasText: 'Kamar M1' }).click()
+    await expect(page.locator('main h1')).toBeVisible()
     // Modal: 5 periods (2 arrears + current + 2 advance), 3 checked by default
     await page.click('main button:has-text("Catat bayar")')
     await expect(page.locator('h2:text-is("Catat pembayaran")')).toBeVisible()
@@ -72,5 +86,18 @@ test.describe('Multi-month payments (dummy)', () => {
     await page.click('main button:has-text("Catat bayar")')
     await expect(page.locator('form input[type="checkbox"]')).toHaveCount(1)
     await page.locator('form button:has-text("Batal")').click()
+
+    // Dashboard flips to Lunas once arrears are covered
+    await page.click('nav a:has-text("Dashboard")')
+    await expect(page.locator('main a', { hasText: 'Kamar M1' }).first()).toContainText('Lunas')
+
+    // History: own tenant cleared from Belum bayar; current-month row in Lunas tab
+    await page.click('nav a:has-text("Riwayat")')
+    await page.locator('main button', { hasText: 'Belum bayar' }).click()
+    await expect(page.locator('main div.bg-white > div', { hasText: 'Tenant Multi E2E' })).toHaveCount(0)
+    await page.locator('main button', { hasText: 'Lunas' }).first().click()
+    await expect(
+      page.locator('main div.bg-white > div', { hasText: 'Tenant Multi E2E' }),
+    ).toHaveCount(1)
   })
 })

@@ -40,6 +40,30 @@ export function unpaidPeriods(
   for (let k = start; k <= end; k = shiftMonth(k, 1)) out.push(k)
   return out.filter((k) => !paid.has(k))
 }
+/** Unpaid months strictly before viewed month (arrears). */
+export function arrearsBefore(moveInDate: string, paidKeys: Iterable<string>, monthKey: string): string[] {
+  return unpaidPeriods(moveInDate, paidKeys, shiftMonth(monthKey, -1), 0)
+}
+/** Unpaid months through viewed month (arrears + current). */
+export function unpaidThrough(moveInDate: string, paidKeys: Iterable<string>, monthKey: string): string[] {
+  return unpaidPeriods(moveInDate, paidKeys, monthKey, 0)
+}
+/**
+ * Room status with arrears override: paid current month + unpaid past
+ * still `terlambat` so debt never hides behind "lunas bulan ini".
+ */
+export function roomStatus(opts: {
+  tenant: Tenant | null | undefined
+  paidKeys: Iterable<string>
+  monthKey: string
+  today?: Date
+}): RoomStatus {
+  const { tenant, paidKeys, monthKey, today } = opts
+  if (!tenant) return 'kosong'
+  const paid = new Set([...paidKeys].map((k) => k.slice(0, 7)))
+  if (arrearsBefore(tenant.move_in_date, paid, monthKey).length > 0) return 'terlambat'
+  return computeStatus({ tenant, hasPayment: paid.has(monthKey), monthKey, today })
+}
 export function formatMonthID(monthKey: string): string {
   return monthKeyToDate(monthKey).toLocaleDateString('id-ID', {
     month: 'long',

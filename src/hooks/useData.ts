@@ -120,5 +120,40 @@ export function usePaymentsForTenant(tenantId: string | null): {
   return { payments, error, reload }
 }
 
-export const fetchPaymentsForMonth = apiFetchMonth
-export const fetchPaymentsForTenant = apiFetchTenant
+/**
+ * All payments for given tenants (one fetch each, parallel).
+ * Needed for arrears-aware status: per-month fetch hides unpaid past months.
+ */
+export function useAllPayments(tenantIds: string[]): {
+  byTenant: Map<string, Payment[]>
+  error: string | null
+} {
+  const [byTenant, setByTenant] = useState<Map<string, Payment[]>>(new Map())
+  const [error, setError] = useState<string | null>(null)
+  const key = tenantIds.join(',')
+
+  useEffect(() => {
+    let cancelled = false
+    if (tenantIds.length === 0) {
+      setByTenant(new Map())
+      setError(null)
+      return
+    }
+    Promise.all(tenantIds.map((id) => apiFetchTenant(id).then((rows) => [id, rows] as const)))
+      .then((entries) => {
+        if (cancelled) return
+        setByTenant(new Map(entries))
+        setError(null)
+      })
+      .catch((e: Error) => {
+        if (cancelled) return
+        setError(e.message)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  return { byTenant, error }
+}
