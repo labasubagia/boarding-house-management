@@ -21,7 +21,7 @@ dueDate = min(day(move_in_date), lastDayOfMonth(month))
 
 | Status | Syarat |
 | --- | --- |
-| `kosong` | Tidak ada penyewa aktif di kamar |
+| `kosong` | Tidak ada penghuni untuk bulan itu (kamar kosong, atau penyewa baru masuk bulan berikutnya) |
 | `lunas` | Bulan itu dibayar DAN tidak ada tunggakan bulan sebelumnya |
 | `belum` | Ada penyewa, belum bayar, dan (**hari ini ≤ jatuh tempo** ATAU bulan sebelum `move_in_date`) |
 | `terlambat` | Belum bayar bulan ini DAN/ATAU masih ada bulan lalu yang belum dibayar |

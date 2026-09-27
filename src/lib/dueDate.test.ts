@@ -7,6 +7,7 @@ import {
   formatMonthID,
   isPastDue,
   monthKeyToDate,
+  occupantForMonth,
   roomStatus,
   shiftMonth,
   startOfMonth,
@@ -261,5 +262,14 @@ describe('arrearsBefore / unpaidThrough / roomStatus', () => {
     expect(
       roomStatus({ tenant: t, paidKeys: ['2026-01', '2026-02', '2026-03'], monthKey: '2026-03' }),
     ).toBe('lunas')
+  })
+})
+
+describe('occupantForMonth — future tenant invisible', () => {
+  it('active tenant not yet moved in → no occupant for earlier months', () => {
+    const t = tenant({ id: 'new', room_id: 'r9', move_in_date: '2026-09-10', is_active: true })
+    expect(occupantForMonth([t], 'r9', '2026-08')).toBeUndefined()
+    expect(occupantForMonth([t], 'r9', '2026-09')?.id).toBe('new')
+    expect(unpaidThrough(t.move_in_date, [], '2026-08')).toEqual([])
   })
 })

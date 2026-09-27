@@ -136,9 +136,10 @@ export function computeStatus(opts: {
 }
 
 /**
- * Occupant billed for a room in `monthKey`: active tenant wins; else tenant
- * whose [move_in, move_out) covers the month (keeps past months `lunas`,
- * not `kosong`, after move-out).
+ * Occupant billed for a room in `monthKey`: active tenant wins only when
+ * already moved in (`move_in` month <= viewed month); else tenant whose
+ * [move_in, move_out) covers the month (keeps past months `lunas`,
+ * not `kosong`, after move-out; future tenant stays invisible before masuk).
  */
 export function occupantForMonth(
   tenants: Tenant[],
@@ -147,7 +148,7 @@ export function occupantForMonth(
 ): Tenant | undefined {
   const inRoom = tenants.filter((t) => t.room_id === roomId)
   const active = inRoom.find((t) => t.is_active)
-  if (active) return active
+  if (active && active.move_in_date.slice(0, 7) <= monthKey) return active
   const monthStart = `${monthKey}-01`
   const dated = inRoom.filter((t) => t.move_in_date.slice(0, 7) <= monthKey)
   dated.sort((a, b) => b.move_in_date.localeCompare(a.move_in_date))
